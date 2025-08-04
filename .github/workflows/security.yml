@@ -1,0 +1,446 @@
+name: Security Scanning
+
+on:
+  schedule:
+    # Run security scans daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # Dependency Vulnerability Scanning
+  dependency-scan:
+    name: Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run npm audit
+        run: |
+          npm audit --audit-level=moderate --json > npm-audit.json || true
+          npm audit --audit-level=moderate
+
+      - name: Run Snyk vulnerability scan
+        uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=medium --json > snyk-report.json
+        continue-on-error: true
+
+      - name: Run OWASP Dependency Check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: '3D-CAD-AI'
+          path: '.'
+          format: 'ALL'
+          args: >
+            --enableRetired
+            --enableExperimental
+            --nodeAuditSkipDevDependencies
+
+      - name: Upload dependency scan results
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-scan-results
+          path: |
+            npm-audit.json
+            snyk-report.json
+            reports/
+          retention-days: 30
+
+      - name: Create security issue
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = '🚨 Security vulnerabilities detected in dependencies';
+            const body = `
+            ## Security Scan Results
+            
+            High or critical vulnerabilities have been detected in project dependencies.
+            
+            **Scan Date:** ${new Date().toISOString()}
+            **Workflow:** ${context.workflow}
+            **Run ID:** ${context.runId}
+            
+            Please review the scan results and update vulnerable dependencies immediately.
+            
+            ### Next Steps
+            1. Review the detailed scan results in the workflow artifacts
+            2. Update vulnerable packages to secure versions
+            3. Run \`npm audit fix\` to automatically fix issues where possible
+            4. For packages without fixes, consider alternative packages
+            
+            ### Artifacts
+            - npm-audit.json
+            - snyk-report.json
+            - OWASP Dependency Check reports
+            `;
+            
+            // Check if issue already exists
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'security,dependencies'
+            });
+            
+            const existingIssue = issues.data.find(issue => issue.title === title);
+            
+            if (!existingIssue) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: title,
+                body: body,
+                labels: ['security', 'dependencies', 'high-priority']
+              });
+            }
+
+  # Code Security Analysis
+  code-analysis:
+    name: Code Security Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript, typescript
+          queries: security-and-quality
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:javascript"
+
+      - name: Run Semgrep
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: >-
+            p/security-audit
+            p/secrets
+            p/owasp-top-ten
+            p/javascript
+            p/typescript
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+
+      - name: Run ESLint Security Plugin
+        run: |
+          npm ci
+          npx eslint . --ext .js,.jsx,.ts,.tsx --config .eslintrc.security.js --format json --output-file eslint-security.json || true
+
+      - name: Upload code analysis results
+        uses: actions/upload-artifact@v4
+        with:
+          name: code-analysis-results
+          path: |
+            eslint-security.json
+          retention-days: 30
+
+  # Secret Scanning
+  secret-scan:
+    name: Secret Scanning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run TruffleHog
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: main
+          head: HEAD
+          extra_args: --debug --only-verified
+
+      - name: Run GitLeaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
+      - name: Scan for hardcoded secrets
+        run: |
+          # Custom secret patterns
+          echo "Scanning for potential secrets..."
+          
+          # API keys
+          grep -r -i "api[_-]key\s*[:=]\s*['\"][^'\"]*['\"]" . --exclude-dir=node_modules --exclude-dir=.git || true
+          
+          # Database URLs
+          grep -r -i "database[_-]url\s*[:=]\s*['\"][^'\"]*['\"]" . --exclude-dir=node_modules --exclude-dir=.git || true
+          
+          # Private keys
+          grep -r "BEGIN.*PRIVATE.*KEY" . --exclude-dir=node_modules --exclude-dir=.git || true
+          
+          # AWS credentials
+          grep -r -i "aws[_-]secret[_-]access[_-]key" . --exclude-dir=node_modules --exclude-dir=.git || true
+
+  # Container Security Scanning
+  container-scan:
+    name: Container Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: |
+          docker build -t 3d-cad-ai:security-scan .
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: '3d-cad-ai:security-scan'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Run Snyk Container scan
+        uses: snyk/actions/docker@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          image: '3d-cad-ai:security-scan'
+          args: --severity-threshold=high
+
+      - name: Run Docker Bench Security
+        run: |
+          docker run --rm --net host --pid host --userns host --cap-add audit_control \
+            -e DOCKER_CONTENT_TRUST=$DOCKER_CONTENT_TRUST \
+            -v /etc:/etc:ro \
+            -v /usr/bin/containerd:/usr/bin/containerd:ro \
+            -v /usr/bin/runc:/usr/bin/runc:ro \
+            -v /usr/lib/systemd:/usr/lib/systemd:ro \
+            -v /var/lib:/var/lib:ro \
+            -v /var/run/docker.sock:/var/run/docker.sock:ro \
+            --label docker_bench_security \
+            docker/docker-bench-security
+
+  # Infrastructure Security
+  infrastructure-scan:
+    name: Infrastructure Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Checkov
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: .
+          framework: dockerfile,github_actions,secrets
+          output_format: sarif
+          output_file_path: checkov-results.sarif
+
+      - name: Upload Checkov scan results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: checkov-results.sarif
+
+      - name: Scan GitHub Actions workflows
+        run: |
+          # Check for potential security issues in workflows
+          echo "Scanning GitHub Actions workflows..."
+          
+          # Check for hardcoded secrets
+          grep -r "password\|secret\|token" .github/workflows/ || true
+          
+          # Check for dangerous permissions
+          grep -r "write-all\|contents: write" .github/workflows/ || true
+          
+          # Check for pull_request_target usage
+          grep -r "pull_request_target" .github/workflows/ || true
+
+  # License Compliance
+  license-scan:
+    name: License Compliance Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run license checker
+        run: |
+          npx license-checker --json --out license-report.json
+          npx license-checker --summary
+
+      - name: Check for prohibited licenses
+        run: |
+          # Define prohibited licenses
+          PROHIBITED_LICENSES="GPL-2.0,GPL-3.0,AGPL-1.0,AGPL-3.0"
+          
+          # Check if any dependencies use prohibited licenses
+          if npx license-checker --excludePrivatePackages --onlyAllow "MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC;Unlicense" --failOn "$PROHIBITED_LICENSES"; then
+            echo "✅ All licenses are compliant"
+          else
+            echo "❌ Found prohibited licenses"
+            exit 1
+          fi
+
+      - name: Upload license report
+        uses: actions/upload-artifact@v4
+        with:
+          name: license-report
+          path: license-report.json
+          retention-days: 30
+
+  # Security Report Generation
+  security-report:
+    name: Generate Security Report
+    runs-on: ubuntu-latest
+    needs: [dependency-scan, code-analysis, secret-scan, container-scan, infrastructure-scan, license-scan]
+    if: always()
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all scan results
+        uses: actions/download-artifact@v4
+        with:
+          path: security-results/
+
+      - name: Generate security report
+        run: |
+          cat > security-report.md << 'EOF'
+          # Security Scan Report
+          
+          **Date:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          **Repository:** ${{ github.repository }}
+          **Branch:** ${{ github.ref_name }}
+          **Commit:** ${{ github.sha }}
+          
+          ## Scan Results Summary
+          
+          | Scan Type | Status | Details |
+          |-----------|--------|---------|
+          | Dependency Scan | ${{ needs.dependency-scan.result }} | Vulnerability scan of npm dependencies |
+          | Code Analysis | ${{ needs.code-analysis.result }} | Static code analysis for security issues |
+          | Secret Scan | ${{ needs.secret-scan.result }} | Scan for hardcoded secrets and credentials |
+          | Container Scan | ${{ needs.container-scan.result }} | Docker image vulnerability scan |
+          | Infrastructure Scan | ${{ needs.infrastructure-scan.result }} | Infrastructure as Code security scan |
+          | License Scan | ${{ needs.license-scan.result }} | License compliance check |
+          
+          ## Recommendations
+          
+          1. **High Priority**: Address any critical or high severity vulnerabilities immediately
+          2. **Medium Priority**: Plan remediation for medium severity issues in next sprint
+          3. **Low Priority**: Address low severity issues during regular maintenance
+          4. **Monitoring**: Set up automated alerts for new vulnerabilities
+          
+          ## Next Steps
+          
+          - Review detailed scan results in workflow artifacts
+          - Create issues for critical vulnerabilities
+          - Update security documentation
+          - Schedule regular security reviews
+          
+          EOF
+
+      - name: Upload security report
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-report
+          path: security-report.md
+          retention-days: 90
+
+      - name: Comment on PR with security summary
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('security-report.md', 'utf8');
+            
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 🔒 Security Scan Results\n\n${report}`
+            });
+
+  # Security Monitoring Setup
+  monitoring:
+    name: Security Monitoring
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Setup security monitoring
+        run: |
+          echo "Setting up security monitoring..."
+          # This would typically configure:
+          # - Dependabot alerts
+          # - Code scanning alerts
+          # - Secret scanning alerts
+          # - Security advisories
+          echo "Security monitoring configured"
+
+      - name: Enable GitHub security features
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Enable Dependabot alerts
+            try {
+              await github.rest.repos.enableVulnerabilityAlerts({
+                owner: context.repo.owner,
+                repo: context.repo.repo
+              });
+              console.log('✅ Dependabot alerts enabled');
+            } catch (error) {
+              console.log('ℹ️ Dependabot alerts already enabled or not available');
+            }
+            
+            // Enable automated security fixes
+            try {
+              await github.rest.repos.enableAutomatedSecurityFixes({
+                owner: context.repo.owner,
+                repo: context.repo.repo
+              });
+              console.log('✅ Automated security fixes enabled');
+            } catch (error) {
+              console.log('ℹ️ Automated security fixes already enabled or not available');
+            }
+

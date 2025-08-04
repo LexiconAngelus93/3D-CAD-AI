@@ -1,0 +1,636 @@
+name: Performance Monitoring
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run performance tests daily at 3 AM UTC
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to test'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      test_type:
+        description: 'Type of performance test'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - lighthouse
+          - load
+          - stress
+          - memory
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # Lighthouse Performance Audit
+  lighthouse:
+    name: Lighthouse Performance Audit
+    runs-on: ubuntu-latest
+    if: github.event.inputs.test_type == 'lighthouse' || github.event.inputs.test_type == 'all' || github.event.inputs.test_type == ''
+    strategy:
+      matrix:
+        url:
+          - '/'
+          - '/cad'
+          - '/pcb'
+          - '/simulation'
+          - '/ai-assistant'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build:prod
+
+      - name: Start application
+        run: |
+          npm start &
+          sleep 30
+          curl -f http://localhost:3000 || exit 1
+
+      - name: Run Lighthouse CI
+        uses: treosh/lighthouse-ci-action@v10
+        with:
+          urls: |
+            http://localhost:3000${{ matrix.url }}
+          configPath: '.lighthouserc.json'
+          uploadArtifacts: true
+          temporaryPublicStorage: true
+
+      - name: Upload Lighthouse results
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-results-${{ matrix.url == '/' && 'home' || matrix.url }}
+          path: |
+            .lighthouseci/
+            lighthouse-results.json
+          retention-days: 30
+
+  # Bundle Size Analysis
+  bundle-analysis:
+    name: Bundle Size Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and analyze bundle
+        run: |
+          npm run build:prod
+          npm run analyze:bundle
+
+      - name: Bundle size check
+        uses: andresz1/size-limit-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          package_manager: npm
+
+      - name: Upload bundle analysis
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-analysis
+          path: |
+            bundle-analyzer-report.html
+            bundle-stats.json
+            size-limit-report.json
+          retention-days: 30
+
+      - name: Comment bundle size on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            try {
+              const stats = JSON.parse(fs.readFileSync('bundle-stats.json', 'utf8'));
+              const sizeLimit = JSON.parse(fs.readFileSync('size-limit-report.json', 'utf8'));
+              
+              const comment = `## 📦 Bundle Size Analysis
+              
+              | Asset | Size | Gzipped | Change |
+              |-------|------|---------|--------|
+              ${stats.assets.map(asset => 
+                `| ${asset.name} | ${(asset.size / 1024).toFixed(2)} KB | ${(asset.gzipSize / 1024).toFixed(2)} KB | ${asset.change || 'N/A'} |`
+              ).join('\n')}
+              
+              **Total Bundle Size:** ${(stats.totalSize / 1024).toFixed(2)} KB
+              **Gzipped:** ${(stats.totalGzipSize / 1024).toFixed(2)} KB
+              
+              ${sizeLimit.passed ? '✅ Size limit check passed' : '❌ Size limit exceeded'}
+              `;
+              
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: comment
+              });
+            } catch (error) {
+              console.log('Could not read bundle stats:', error.message);
+            }
+
+  # Load Testing
+  load-testing:
+    name: Load Testing
+    runs-on: ubuntu-latest
+    if: github.event.inputs.test_type == 'load' || github.event.inputs.test_type == 'all' || github.event.inputs.test_type == ''
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build:prod
+
+      - name: Start application
+        run: |
+          npm start &
+          sleep 30
+
+      - name: Install k6
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install k6
+
+      - name: Run load tests
+        run: |
+          cat > load-test.js << 'EOF'
+          import http from 'k6/http';
+          import { check, sleep } from 'k6';
+          import { Rate } from 'k6/metrics';
+          
+          export let errorRate = new Rate('errors');
+          
+          export let options = {
+            stages: [
+              { duration: '2m', target: 10 }, // Ramp up
+              { duration: '5m', target: 10 }, // Stay at 10 users
+              { duration: '2m', target: 20 }, // Ramp up to 20 users
+              { duration: '5m', target: 20 }, // Stay at 20 users
+              { duration: '2m', target: 0 },  // Ramp down
+            ],
+            thresholds: {
+              http_req_duration: ['p(95)<2000'], // 95% of requests under 2s
+              http_req_failed: ['rate<0.1'],     // Error rate under 10%
+              errors: ['rate<0.1'],
+            },
+          };
+          
+          export default function() {
+            let response = http.get('http://localhost:3000');
+            
+            check(response, {
+              'status is 200': (r) => r.status === 200,
+              'response time < 2000ms': (r) => r.timings.duration < 2000,
+            }) || errorRate.add(1);
+            
+            // Test different pages
+            const pages = ['/', '/cad', '/pcb', '/simulation'];
+            const randomPage = pages[Math.floor(Math.random() * pages.length)];
+            
+            response = http.get(`http://localhost:3000${randomPage}`);
+            check(response, {
+              'page loads successfully': (r) => r.status === 200,
+            }) || errorRate.add(1);
+            
+            sleep(1);
+          }
+          EOF
+          
+          k6 run --out json=load-test-results.json load-test.js
+
+      - name: Upload load test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-test-results
+          path: |
+            load-test-results.json
+          retention-days: 30
+
+  # Stress Testing
+  stress-testing:
+    name: Stress Testing
+    runs-on: ubuntu-latest
+    if: github.event.inputs.test_type == 'stress' || github.event.inputs.test_type == 'all' || github.event.inputs.test_type == ''
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build:prod
+
+      - name: Start application
+        run: |
+          npm start &
+          sleep 30
+
+      - name: Install k6
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install k6
+
+      - name: Run stress tests
+        run: |
+          cat > stress-test.js << 'EOF'
+          import http from 'k6/http';
+          import { check, sleep } from 'k6';
+          
+          export let options = {
+            stages: [
+              { duration: '1m', target: 50 },   // Ramp up to 50 users
+              { duration: '2m', target: 100 },  // Ramp up to 100 users
+              { duration: '2m', target: 200 },  // Ramp up to 200 users
+              { duration: '2m', target: 300 },  // Ramp up to 300 users
+              { duration: '1m', target: 0 },    // Ramp down
+            ],
+            thresholds: {
+              http_req_duration: ['p(95)<5000'], // 95% under 5s during stress
+              http_req_failed: ['rate<0.2'],     // Error rate under 20%
+            },
+          };
+          
+          export default function() {
+            let response = http.get('http://localhost:3000');
+            
+            check(response, {
+              'status is 200': (r) => r.status === 200,
+              'response time acceptable': (r) => r.timings.duration < 5000,
+            });
+            
+            sleep(Math.random() * 2);
+          }
+          EOF
+          
+          k6 run --out json=stress-test-results.json stress-test.js
+
+      - name: Upload stress test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: stress-test-results
+          path: |
+            stress-test-results.json
+          retention-days: 30
+
+  # Memory Usage Analysis
+  memory-analysis:
+    name: Memory Usage Analysis
+    runs-on: ubuntu-latest
+    if: github.event.inputs.test_type == 'memory' || github.event.inputs.test_type == 'all' || github.event.inputs.test_type == ''
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Puppeteer
+        run: npm install puppeteer
+
+      - name: Build application
+        run: npm run build:prod
+
+      - name: Start application
+        run: |
+          npm start &
+          sleep 30
+
+      - name: Run memory analysis
+        run: |
+          cat > memory-test.js << 'EOF'
+          const puppeteer = require('puppeteer');
+          const fs = require('fs');
+          
+          (async () => {
+            const browser = await puppeteer.launch({
+              headless: true,
+              args: ['--no-sandbox', '--disable-setuid-sandbox']
+            });
+            
+            const page = await browser.newPage();
+            
+            // Enable runtime domain to collect memory metrics
+            const client = await page.target().createCDPSession();
+            await client.send('Runtime.enable');
+            
+            const results = [];
+            
+            // Test different pages
+            const pages = [
+              { name: 'Home', url: 'http://localhost:3000/' },
+              { name: 'CAD', url: 'http://localhost:3000/cad' },
+              { name: 'PCB', url: 'http://localhost:3000/pcb' },
+              { name: 'Simulation', url: 'http://localhost:3000/simulation' }
+            ];
+            
+            for (const testPage of pages) {
+              console.log(`Testing ${testPage.name} page...`);
+              
+              await page.goto(testPage.url, { waitUntil: 'networkidle0' });
+              
+              // Wait for page to fully load
+              await page.waitForTimeout(5000);
+              
+              // Collect memory metrics
+              const metrics = await client.send('Runtime.getHeapUsage');
+              const jsHeapUsedSize = await page.evaluate(() => performance.memory.usedJSHeapSize);
+              const jsHeapTotalSize = await page.evaluate(() => performance.memory.totalJSHeapSize);
+              
+              results.push({
+                page: testPage.name,
+                url: testPage.url,
+                heapUsed: metrics.usedSize,
+                heapTotal: metrics.totalSize,
+                jsHeapUsed: jsHeapUsedSize,
+                jsHeapTotal: jsHeapTotalSize,
+                timestamp: new Date().toISOString()
+              });
+              
+              // Simulate user interactions
+              await page.evaluate(() => {
+                // Trigger some interactions to test memory leaks
+                for (let i = 0; i < 100; i++) {
+                  const div = document.createElement('div');
+                  div.innerHTML = 'Test content ' + i;
+                  document.body.appendChild(div);
+                  document.body.removeChild(div);
+                }
+              });
+              
+              await page.waitForTimeout(2000);
+              
+              // Collect metrics after interactions
+              const metricsAfter = await client.send('Runtime.getHeapUsage');
+              const jsHeapUsedAfter = await page.evaluate(() => performance.memory.usedJSHeapSize);
+              
+              results.push({
+                page: testPage.name + ' (after interactions)',
+                url: testPage.url,
+                heapUsed: metricsAfter.usedSize,
+                heapTotal: metricsAfter.totalSize,
+                jsHeapUsed: jsHeapUsedAfter,
+                jsHeapTotal: jsHeapTotalSize,
+                memoryIncrease: metricsAfter.usedSize - metrics.usedSize,
+                timestamp: new Date().toISOString()
+              });
+            }
+            
+            // Save results
+            fs.writeFileSync('memory-analysis.json', JSON.stringify(results, null, 2));
+            
+            // Generate summary
+            const summary = {
+              totalPages: pages.length,
+              averageHeapUsage: results.reduce((sum, r) => sum + r.heapUsed, 0) / results.length,
+              maxHeapUsage: Math.max(...results.map(r => r.heapUsed)),
+              memoryLeaks: results.filter(r => r.memoryIncrease > 1024 * 1024), // > 1MB increase
+              timestamp: new Date().toISOString()
+            };
+            
+            fs.writeFileSync('memory-summary.json', JSON.stringify(summary, null, 2));
+            
+            console.log('Memory analysis completed');
+            console.log('Average heap usage:', (summary.averageHeapUsage / 1024 / 1024).toFixed(2), 'MB');
+            console.log('Max heap usage:', (summary.maxHeapUsage / 1024 / 1024).toFixed(2), 'MB');
+            console.log('Potential memory leaks:', summary.memoryLeaks.length);
+            
+            await browser.close();
+          })();
+          EOF
+          
+          node memory-test.js
+
+      - name: Upload memory analysis results
+        uses: actions/upload-artifact@v4
+        with:
+          name: memory-analysis-results
+          path: |
+            memory-analysis.json
+            memory-summary.json
+          retention-days: 30
+
+  # Performance Regression Detection
+  regression-detection:
+    name: Performance Regression Detection
+    runs-on: ubuntu-latest
+    needs: [lighthouse, bundle-analysis, load-testing]
+    if: always()
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download performance results
+        uses: actions/download-artifact@v4
+        with:
+          path: performance-results/
+
+      - name: Analyze performance trends
+        run: |
+          cat > analyze-performance.js << 'EOF'
+          const fs = require('fs');
+          const path = require('path');
+          
+          // Load current results
+          const resultsDir = 'performance-results';
+          const results = {
+            lighthouse: [],
+            bundle: null,
+            load: null
+          };
+          
+          // Process Lighthouse results
+          try {
+            const lighthouseFiles = fs.readdirSync(resultsDir)
+              .filter(dir => dir.startsWith('lighthouse-results-'))
+              .map(dir => path.join(resultsDir, dir));
+            
+            for (const dir of lighthouseFiles) {
+              const files = fs.readdirSync(dir);
+              const resultFile = files.find(f => f.endsWith('.json'));
+              if (resultFile) {
+                const data = JSON.parse(fs.readFileSync(path.join(dir, resultFile), 'utf8'));
+                results.lighthouse.push(data);
+              }
+            }
+          } catch (error) {
+            console.log('No Lighthouse results found');
+          }
+          
+          // Process bundle analysis
+          try {
+            const bundleData = fs.readFileSync(path.join(resultsDir, 'bundle-analysis/bundle-stats.json'), 'utf8');
+            results.bundle = JSON.parse(bundleData);
+          } catch (error) {
+            console.log('No bundle analysis results found');
+          }
+          
+          // Process load test results
+          try {
+            const loadData = fs.readFileSync(path.join(resultsDir, 'load-test-results/load-test-results.json'), 'utf8');
+            results.load = JSON.parse(loadData);
+          } catch (error) {
+            console.log('No load test results found');
+          }
+          
+          // Generate performance report
+          const report = {
+            timestamp: new Date().toISOString(),
+            summary: {
+              lighthouse: {
+                averagePerformanceScore: results.lighthouse.length > 0 
+                  ? results.lighthouse.reduce((sum, r) => sum + (r.lhr?.categories?.performance?.score || 0), 0) / results.lighthouse.length
+                  : 0,
+                averageAccessibilityScore: results.lighthouse.length > 0
+                  ? results.lighthouse.reduce((sum, r) => sum + (r.lhr?.categories?.accessibility?.score || 0), 0) / results.lighthouse.length
+                  : 0
+              },
+              bundle: {
+                totalSize: results.bundle?.totalSize || 0,
+                gzippedSize: results.bundle?.totalGzipSize || 0
+              },
+              load: {
+                averageResponseTime: results.load?.metrics?.http_req_duration?.avg || 0,
+                errorRate: results.load?.metrics?.http_req_failed?.rate || 0
+              }
+            },
+            details: results
+          };
+          
+          fs.writeFileSync('performance-report.json', JSON.stringify(report, null, 2));
+          
+          // Check for regressions
+          const regressions = [];
+          
+          if (report.summary.lighthouse.averagePerformanceScore < 0.8) {
+            regressions.push('Lighthouse performance score below 80%');
+          }
+          
+          if (report.summary.bundle.totalSize > 5 * 1024 * 1024) { // 5MB
+            regressions.push('Bundle size exceeds 5MB');
+          }
+          
+          if (report.summary.load.averageResponseTime > 2000) { // 2 seconds
+            regressions.push('Average response time exceeds 2 seconds');
+          }
+          
+          if (report.summary.load.errorRate > 0.05) { // 5%
+            regressions.push('Error rate exceeds 5%');
+          }
+          
+          if (regressions.length > 0) {
+            console.log('❌ Performance regressions detected:');
+            regressions.forEach(r => console.log(`  - ${r}`));
+            process.exit(1);
+          } else {
+            console.log('✅ No performance regressions detected');
+          }
+          EOF
+          
+          node analyze-performance.js
+
+      - name: Upload performance report
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-report
+          path: performance-report.json
+          retention-days: 90
+
+      - name: Comment performance results on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            try {
+              const report = JSON.parse(fs.readFileSync('performance-report.json', 'utf8'));
+              
+              const comment = `## ⚡ Performance Test Results
+              
+              ### Lighthouse Scores
+              - **Performance:** ${(report.summary.lighthouse.averagePerformanceScore * 100).toFixed(1)}%
+              - **Accessibility:** ${(report.summary.lighthouse.averageAccessibilityScore * 100).toFixed(1)}%
+              
+              ### Bundle Analysis
+              - **Total Size:** ${(report.summary.bundle.totalSize / 1024 / 1024).toFixed(2)} MB
+              - **Gzipped:** ${(report.summary.bundle.gzippedSize / 1024 / 1024).toFixed(2)} MB
+              
+              ### Load Testing
+              - **Average Response Time:** ${report.summary.load.averageResponseTime.toFixed(0)}ms
+              - **Error Rate:** ${(report.summary.load.errorRate * 100).toFixed(2)}%
+              
+              ${report.summary.lighthouse.averagePerformanceScore >= 0.8 ? '✅' : '❌'} Performance Score
+              ${report.summary.bundle.totalSize <= 5 * 1024 * 1024 ? '✅' : '❌'} Bundle Size
+              ${report.summary.load.averageResponseTime <= 2000 ? '✅' : '❌'} Response Time
+              ${report.summary.load.errorRate <= 0.05 ? '✅' : '❌'} Error Rate
+              `;
+              
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: comment
+              });
+            } catch (error) {
+              console.log('Could not read performance report:', error.message);
+            }
+
