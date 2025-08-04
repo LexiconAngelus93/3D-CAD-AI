@@ -1,4 +1,22 @@
-import * as THREE from 'three';
+import { 
+  Scene, 
+  PerspectiveCamera, 
+  WebGLRenderer, 
+  BufferGeometry, 
+  Material, 
+  Mesh, 
+  Vector3, 
+  Vector2, 
+  Plane,
+  BoxGeometry,
+  SphereGeometry,
+  CylinderGeometry,
+  MeshLambertMaterial,
+  AmbientLight,
+  DirectionalLight,
+  GridHelper,
+  AxesHelper
+} from 'three';
 import { GeometryEngine } from './GeometryEngine';
 import { RenderEngine } from './RenderEngine';
 import { ConstraintSolver } from './ConstraintSolver';
@@ -8,9 +26,9 @@ export interface CADObject {
   id: string;
   name: string;
   type: 'sketch' | 'solid' | 'surface' | 'assembly';
-  geometry: THREE.BufferGeometry;
-  material: THREE.Material;
-  mesh: THREE.Mesh;
+  geometry: BufferGeometry;
+  material: Material;
+  mesh: Mesh;
   visible: boolean;
   locked: boolean;
   parent?: string;
@@ -22,7 +40,7 @@ export interface CADObject {
 export interface Sketch {
   id: string;
   name: string;
-  plane: THREE.Plane;
+  plane: Plane;
   entities: SketchEntity[];
   constraints: SketchConstraint[];
   closed: boolean;
@@ -31,7 +49,7 @@ export interface Sketch {
 export interface SketchEntity {
   id: string;
   type: 'line' | 'arc' | 'circle' | 'spline' | 'point';
-  points: THREE.Vector2[];
+  points: Vector2[];
   properties: Record<string, any>;
 }
 
@@ -55,14 +73,14 @@ export class CADEngine {
   private activeTool: string = 'select';
   private viewMode: 'modeling' | 'pcb' | 'simulation' = 'modeling';
   
-  private scene: THREE.Scene;
-  private camera: THREE.PerspectiveCamera;
-  private renderer: THREE.WebGLRenderer | null = null;
+  private scene: Scene;
+  private camera: PerspectiveCamera;
+  private renderer: WebGLRenderer | null = null;
   private container: HTMLElement | null = null;
 
   constructor() {
-    this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
+    this.scene = new Scene();
+    this.camera = new PerspectiveCamera(75, 1, 0.1, 1000);
     
     this.geometryEngine = new GeometryEngine();
     this.renderEngine = new RenderEngine(this.scene, this.camera);
@@ -85,10 +103,10 @@ export class CADEngine {
 
   private setupScene(): void {
     // Set up lighting
-    const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+    const ambientLight = new AmbientLight(0x404040, 0.6);
     this.scene.add(ambientLight);
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    const directionalLight = new DirectionalLight(0xffffff, 0.8);
     directionalLight.position.set(10, 10, 5);
     directionalLight.castShadow = true;
     this.scene.add(directionalLight);
@@ -98,11 +116,11 @@ export class CADEngine {
     this.camera.lookAt(0, 0, 0);
 
     // Add grid
-    const gridHelper = new THREE.GridHelper(20, 20, 0x444444, 0x444444);
+    const gridHelper = new GridHelper(20, 20, 0x444444, 0x444444);
     this.scene.add(gridHelper);
 
     // Add axes helper
-    const axesHelper = new THREE.AxesHelper(5);
+    const axesHelper = new AxesHelper(5);
     this.scene.add(axesHelper);
   }
 
@@ -139,9 +157,9 @@ export class CADEngine {
       id,
       name: object.name || `Object_${id}`,
       type: object.type || 'solid',
-      geometry: object.geometry || new THREE.BoxGeometry(1, 1, 1),
-      material: object.material || new THREE.MeshLambertMaterial({ color: 0x00ff00 }),
-      mesh: new THREE.Mesh(),
+      geometry: object.geometry || new BoxGeometry(1, 1, 1),
+      material: object.material || new MeshLambertMaterial({ color: 0x00ff00 }),
+      mesh: new Mesh(),
       visible: object.visible !== undefined ? object.visible : true,
       locked: object.locked || false,
       children: object.children || [],
@@ -150,7 +168,7 @@ export class CADEngine {
       ...object
     };
 
-    cadObject.mesh = new THREE.Mesh(cadObject.geometry, cadObject.material);
+    cadObject.mesh = new Mesh(cadObject.geometry, cadObject.material);
     cadObject.mesh.userData = { id };
     
     this.objects.set(id, cadObject);
@@ -206,7 +224,7 @@ export class CADEngine {
         this.selectedObjects.add(id);
         const object = this.objects.get(id)!;
         // Add selection highlight
-        if (object.material instanceof THREE.MeshLambertMaterial) {
+        if (object.material instanceof MeshLambertMaterial) {
           object.material.emissive.setHex(0x444444);
         }
       }
@@ -216,7 +234,7 @@ export class CADEngine {
   clearSelection(): void {
     this.selectedObjects.forEach(id => {
       const object = this.objects.get(id);
-      if (object && object.material instanceof THREE.MeshLambertMaterial) {
+      if (object && object.material instanceof MeshLambertMaterial) {
         object.material.emissive.setHex(0x000000);
       }
     });
@@ -263,12 +281,12 @@ export class CADEngine {
   }
 
   // Sketch Management
-  createSketch(plane?: THREE.Plane): string {
+  createSketch(plane?: Plane): string {
     const id = this.generateId();
     const sketch: Sketch = {
       id,
       name: `Sketch_${id}`,
-      plane: plane || new THREE.Plane(new THREE.Vector3(0, 0, 1), 0),
+      plane: plane || new Plane(new Vector3(0, 0, 1), 0),
       entities: [],
       constraints: [],
       closed: false
@@ -297,8 +315,8 @@ export class CADEngine {
 
   // Geometry Operations
   createBox(width: number, height: number, depth: number): string {
-    const geometry = new THREE.BoxGeometry(width, height, depth);
-    const material = new THREE.MeshLambertMaterial({ color: 0x00ff00 });
+    const geometry = new BoxGeometry(width, height, depth);
+    const material = new MeshLambertMaterial({ color: 0x00ff00 });
     
     return this.addObject({
       type: 'solid',
@@ -309,8 +327,8 @@ export class CADEngine {
   }
 
   createSphere(radius: number): string {
-    const geometry = new THREE.SphereGeometry(radius, 32, 32);
-    const material = new THREE.MeshLambertMaterial({ color: 0x0000ff });
+    const geometry = new SphereGeometry(radius, 32, 32);
+    const material = new MeshLambertMaterial({ color: 0x0000ff });
     
     return this.addObject({
       type: 'solid',
@@ -321,8 +339,8 @@ export class CADEngine {
   }
 
   createCylinder(radiusTop: number, radiusBottom: number, height: number): string {
-    const geometry = new THREE.CylinderGeometry(radiusTop, radiusBottom, height, 32);
-    const material = new THREE.MeshLambertMaterial({ color: 0xff0000 });
+    const geometry = new CylinderGeometry(radiusTop, radiusBottom, height, 32);
+    const material = new MeshLambertMaterial({ color: 0xff0000 });
     
     return this.addObject({
       type: 'solid',
@@ -343,8 +361,8 @@ export class CADEngine {
     }
 
     // For now, just create a new object at the midpoint
-    const geometry = new THREE.BoxGeometry(2, 2, 2);
-    const material = new THREE.MeshLambertMaterial({ color: 0xffff00 });
+    const geometry = new BoxGeometry(2, 2, 2);
+    const material = new MeshLambertMaterial({ color: 0xffff00 });
     
     return this.addObject({
       type: 'solid',
@@ -363,8 +381,8 @@ export class CADEngine {
       throw new Error('Objects not found for subtract operation');
     }
 
-    const geometry = new THREE.BoxGeometry(1.5, 1.5, 1.5);
-    const material = new THREE.MeshLambertMaterial({ color: 0xff00ff });
+    const geometry = new BoxGeometry(1.5, 1.5, 1.5);
+    const material = new MeshLambertMaterial({ color: 0xff00ff });
     
     return this.addObject({
       type: 'solid',
@@ -383,8 +401,8 @@ export class CADEngine {
       throw new Error('Objects not found for intersect operation');
     }
 
-    const geometry = new THREE.BoxGeometry(0.8, 0.8, 0.8);
-    const material = new THREE.MeshLambertMaterial({ color: 0x00ffff });
+    const geometry = new BoxGeometry(0.8, 0.8, 0.8);
+    const material = new MeshLambertMaterial({ color: 0x00ffff });
     
     return this.addObject({
       type: 'solid',
@@ -460,30 +478,30 @@ export class CADEngine {
     }
   }
 
-  private reconstructGeometry(properties: any): THREE.BufferGeometry {
+  private reconstructGeometry(properties: any): BufferGeometry {
     switch (properties.operation) {
       case 'box':
-        return new THREE.BoxGeometry(
+        return new BoxGeometry(
           properties.width,
           properties.height,
           properties.depth
         );
       case 'sphere':
-        return new THREE.SphereGeometry(properties.radius, 32, 32);
+        return new SphereGeometry(properties.radius, 32, 32);
       case 'cylinder':
-        return new THREE.CylinderGeometry(
+        return new CylinderGeometry(
           properties.radiusTop,
           properties.radiusBottom,
           properties.height,
           32
         );
       default:
-        return new THREE.BoxGeometry(1, 1, 1);
+        return new BoxGeometry(1, 1, 1);
     }
   }
 
-  private reconstructMaterial(materialData: any): THREE.Material {
-    return new THREE.MeshLambertMaterial({
+  private reconstructMaterial(materialData: any): Material {
+    return new MeshLambertMaterial({
       color: materialData.color || 0x00ff00
     });
   }
@@ -492,7 +510,7 @@ export class CADEngine {
   dispose(): void {
     this.objects.forEach(object => {
       object.geometry.dispose();
-      if (object.material instanceof THREE.Material) {
+      if (object.material instanceof Material) {
         object.material.dispose();
       }
     });

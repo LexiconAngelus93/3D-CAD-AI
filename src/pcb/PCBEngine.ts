@@ -1,4 +1,16 @@
-import * as THREE from 'three';
+import {
+   BoxGeometry,
+  BufferGeometry,
+  Group,
+  Line,
+  LineBasicMaterial,
+  Mesh,
+  MeshLambertMaterial,
+  Object3D,
+  PlaneGeometry,
+  Scene,
+  Vector3 
+} from 'three';
 
 export interface PCBComponent {
   id: string;
@@ -11,7 +23,7 @@ export interface PCBComponent {
   layer: 'top' | 'bottom';
   pins: PCBPin[];
   properties: Record<string, any>;
-  footprint?: THREE.Object3D;
+  footprint?: Object3D;
 }
 
 export interface PCBPin {
@@ -105,10 +117,10 @@ export class PCBEngine {
   private componentLibrary: Map<string, ComponentDefinition> = new Map();
   private autoRouter: AutoRouter;
   private designRuleChecker: DesignRuleChecker;
-  private scene: THREE.Scene;
+  private scene: Scene;
   private isInitialized: boolean = false;
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: Scene) {
     this.scene = scene;
     this.autoRouter = new AutoRouter();
     this.designRuleChecker = new DesignRuleChecker();
@@ -438,9 +450,9 @@ export class PCBEngine {
 
   // Visualization Methods
   private createBoardVisualization(board: PCBBoard): void {
-    const geometry = new THREE.PlaneGeometry(board.dimensions.width, board.dimensions.height);
-    const material = new THREE.MeshLambertMaterial({ color: 0x2d5016 });
-    const mesh = new THREE.Mesh(geometry, material);
+    const geometry = new PlaneGeometry(board.dimensions.width, board.dimensions.height);
+    const material = new MeshLambertMaterial({ color: 0x2d5016 });
+    const mesh = new Mesh(geometry, material);
     
     mesh.userData = { type: 'pcb_board', id: board.id };
     this.scene.add(mesh);
@@ -475,58 +487,58 @@ export class PCBEngine {
   private createTraceVisualization(trace: PCBTrace): void {
     if (trace.path.length < 2) return;
 
-    const points = trace.path.map(p => new THREE.Vector3(p.x, p.y, trace.layer * 0.035));
-    const geometry = new THREE.BufferGeometry().setFromPoints(points);
-    const material = new THREE.LineBasicMaterial({ color: 0xB87333, linewidth: trace.width });
-    const line = new THREE.Line(geometry, material);
+    const points = trace.path.map(p => new Vector3(p.x, p.y, trace.layer * 0.035));
+    const geometry = new BufferGeometry().setFromPoints(points);
+    const material = new LineBasicMaterial({ color: 0xB87333, linewidth: trace.width });
+    const line = new Line(geometry, material);
     
     line.userData = { type: 'pcb_trace', id: trace.id };
     this.scene.add(line);
   }
 
   // Footprint Creation Methods
-  private createResistorFootprint(packageType: string): THREE.Object3D {
-    const group = new THREE.Group();
+  private createResistorFootprint(packageType: string): Object3D {
+    const group = new Group();
     
     // Create body
-    const bodyGeometry = new THREE.BoxGeometry(2.0, 1.25, 0.5);
-    const bodyMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
-    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+    const bodyGeometry = new BoxGeometry(2.0, 1.25, 0.5);
+    const bodyMaterial = new MeshLambertMaterial({ color: 0x333333 });
+    const body = new Mesh(bodyGeometry, bodyMaterial);
     group.add(body);
     
     // Create pads
-    const padGeometry = new THREE.BoxGeometry(0.6, 1.25, 0.1);
-    const padMaterial = new THREE.MeshLambertMaterial({ color: 0xB87333 });
+    const padGeometry = new BoxGeometry(0.6, 1.25, 0.1);
+    const padMaterial = new MeshLambertMaterial({ color: 0xB87333 });
     
-    const pad1 = new THREE.Mesh(padGeometry, padMaterial);
+    const pad1 = new Mesh(padGeometry, padMaterial);
     pad1.position.set(-0.95, 0, -0.25);
     group.add(pad1);
     
-    const pad2 = new THREE.Mesh(padGeometry, padMaterial);
+    const pad2 = new Mesh(padGeometry, padMaterial);
     pad2.position.set(0.95, 0, -0.25);
     group.add(pad2);
     
     return group;
   }
 
-  private createCapacitorFootprint(packageType: string): THREE.Object3D {
-    const group = new THREE.Group();
+  private createCapacitorFootprint(packageType: string): Object3D {
+    const group = new Group();
     
     // Create body
-    const bodyGeometry = new THREE.BoxGeometry(2.0, 1.25, 0.8);
-    const bodyMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
-    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+    const bodyGeometry = new BoxGeometry(2.0, 1.25, 0.8);
+    const bodyMaterial = new MeshLambertMaterial({ color: 0x8B4513 });
+    const body = new Mesh(bodyGeometry, bodyMaterial);
     group.add(body);
     
     // Create pads
-    const padGeometry = new THREE.BoxGeometry(0.6, 1.25, 0.1);
-    const padMaterial = new THREE.MeshLambertMaterial({ color: 0xB87333 });
+    const padGeometry = new BoxGeometry(0.6, 1.25, 0.1);
+    const padMaterial = new MeshLambertMaterial({ color: 0xB87333 });
     
-    const pad1 = new THREE.Mesh(padGeometry, padMaterial);
+    const pad1 = new Mesh(padGeometry, padMaterial);
     pad1.position.set(-0.95, 0, -0.45);
     group.add(pad1);
     
-    const pad2 = new THREE.Mesh(padGeometry, padMaterial);
+    const pad2 = new Mesh(padGeometry, padMaterial);
     pad2.position.set(0.95, 0, -0.45);
     group.add(pad2);
     
@@ -714,6 +726,6 @@ interface ComponentDefinition {
     position: { x: number; y: number };
     type: 'input' | 'output' | 'power' | 'ground' | 'signal';
   }[];
-  footprint: THREE.Object3D;
+  footprint: Object3D;
 }
 

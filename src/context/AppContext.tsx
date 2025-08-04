@@ -4,7 +4,7 @@ import { AIEngine } from '../ai/AIEngine';
 import { PCBEngine } from '../pcb/PCBEngine';
 import { SchematicEngine } from '../pcb/SchematicEngine';
 import { SimulationEngine } from '../simulation/SimulationEngine';
-import * as THREE from 'three';
+import { Scene, PerspectiveCamera } from 'three';
 
 export interface AppState {
   selectedTool: string;
@@ -111,8 +111,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [appState, dispatch] = useReducer(appReducer, initialState);
 
   // Initialize engines
-  const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+  const scene = new Scene();
+  const camera = new PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
   
   const cadEngine = new CADEngine(scene, camera);
   const aiEngine = new AIEngine(cadEngine);

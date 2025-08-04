@@ -1,4 +1,6 @@
-import * as THREE from 'three';
+import {
+   Vector2 
+} from 'three';
 
 export interface Constraint {
   id: string;
@@ -323,30 +325,30 @@ export class ConstraintSolver {
     return direction.x; // X component should be zero for vertical
   }
 
-  private getEntityPoint(entity: GeometricEntity): THREE.Vector2 {
+  private getEntityPoint(entity: GeometricEntity): Vector2 {
     switch (entity.type) {
       case 'point':
-        return new THREE.Vector2(entity.parameters[0], entity.parameters[1]);
+        return new Vector2(entity.parameters[0], entity.parameters[1]);
       case 'line':
         // Return start point
-        return new THREE.Vector2(entity.parameters[0], entity.parameters[1]);
+        return new Vector2(entity.parameters[0], entity.parameters[1]);
       case 'circle':
       case 'arc':
         // Return center point
-        return new THREE.Vector2(entity.parameters[0], entity.parameters[1]);
+        return new Vector2(entity.parameters[0], entity.parameters[1]);
       default:
-        return new THREE.Vector2(0, 0);
+        return new Vector2(0, 0);
     }
   }
 
-  private getEntityDirection(entity: GeometricEntity): THREE.Vector2 {
+  private getEntityDirection(entity: GeometricEntity): Vector2 {
     switch (entity.type) {
       case 'line':
-        const start = new THREE.Vector2(entity.parameters[0], entity.parameters[1]);
-        const end = new THREE.Vector2(entity.parameters[2], entity.parameters[3]);
+        const start = new Vector2(entity.parameters[0], entity.parameters[1]);
+        const end = new Vector2(entity.parameters[2], entity.parameters[3]);
         return end.sub(start).normalize();
       default:
-        return new THREE.Vector2(1, 0);
+        return new Vector2(1, 0);
     }
   }
 

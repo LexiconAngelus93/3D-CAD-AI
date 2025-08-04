@@ -1,4 +1,19 @@
-import * as THREE from 'three';
+import {
+   Box3,
+  BoxGeometry,
+  BufferGeometry,
+  BufferGeometryUtils,
+  ConeGeometry,
+  CylinderGeometry,
+  Group,
+  Material,
+  Mesh,
+  MeshStandardMaterial,
+  SphereGeometry,
+  TorusGeometry,
+  Triangle,
+  Vector3 
+} from 'three';
 import { CADEngine, CADObject } from '../engine/CADEngine';
 
 export interface AIModelRequest {
@@ -18,8 +33,8 @@ export interface AIModelRequest {
 export interface AIModelResponse {
   success: boolean;
   objectId?: string;
-  geometry?: THREE.BufferGeometry;
-  material?: THREE.Material;
+  geometry?: BufferGeometry;
+  material?: Material;
   metadata?: {
     description: string;
     confidence: number;
@@ -239,7 +254,7 @@ export class AIEngine {
     modelType: string,
     dimensions: { x: number; y: number; z: number },
     request: AIModelRequest
-  ): Promise<THREE.BufferGeometry> {
+  ): Promise<BufferGeometry> {
     switch (modelType) {
       case 'gear':
         return this.createGearGeometry(dimensions);
@@ -258,23 +273,23 @@ export class AIEngine {
       case 'pipe':
         return this.createPipeGeometry(dimensions);
       case 'sphere':
-        return new THREE.SphereGeometry(dimensions.x / 2, 32, 32);
+        return new SphereGeometry(dimensions.x / 2, 32, 32);
       case 'cone':
-        return new THREE.ConeGeometry(dimensions.x / 2, dimensions.y, 32);
+        return new ConeGeometry(dimensions.x / 2, dimensions.y, 32);
       case 'torus':
-        return new THREE.TorusGeometry(dimensions.x / 2, dimensions.x / 8, 16, 100);
+        return new TorusGeometry(dimensions.x / 2, dimensions.x / 8, 16, 100);
       default: // box
-        return new THREE.BoxGeometry(dimensions.x, dimensions.y, dimensions.z);
+        return new BoxGeometry(dimensions.x, dimensions.y, dimensions.z);
     }
   }
 
-  private createGearGeometry(dimensions: { x: number; y: number; z: number }): THREE.BufferGeometry {
+  private createGearGeometry(dimensions: { x: number; y: number; z: number }): BufferGeometry {
     // Create a simplified gear using cylinder with notches
     const radius = dimensions.x / 2;
     const height = dimensions.z;
     const teeth = Math.max(8, Math.floor(radius * 4));
     
-    const geometry = new THREE.CylinderGeometry(radius, radius, height, teeth * 2);
+    const geometry = new CylinderGeometry(radius, radius, height, teeth * 2);
     
     // Modify vertices to create gear teeth (simplified)
     const positions = geometry.attributes.position.array as Float32Array;
@@ -302,42 +317,42 @@ export class AIEngine {
     return geometry;
   }
 
-  private createBracketGeometry(dimensions: { x: number; y: number; z: number }): THREE.BufferGeometry {
+  private createBracketGeometry(dimensions: { x: number; y: number; z: number }): BufferGeometry {
     // Create an L-shaped bracket
-    const group = new THREE.Group();
+    const group = new Group();
     
     // Vertical part
-    const vertical = new THREE.BoxGeometry(dimensions.x * 0.2, dimensions.y, dimensions.z * 0.2);
-    const verticalMesh = new THREE.Mesh(vertical);
+    const vertical = new BoxGeometry(dimensions.x * 0.2, dimensions.y, dimensions.z * 0.2);
+    const verticalMesh = new Mesh(vertical);
     verticalMesh.position.set(-dimensions.x * 0.4, 0, 0);
     group.add(verticalMesh);
     
     // Horizontal part
-    const horizontal = new THREE.BoxGeometry(dimensions.x, dimensions.y * 0.2, dimensions.z * 0.2);
-    const horizontalMesh = new THREE.Mesh(horizontal);
+    const horizontal = new BoxGeometry(dimensions.x, dimensions.y * 0.2, dimensions.z * 0.2);
+    const horizontalMesh = new Mesh(horizontal);
     horizontalMesh.position.set(0, -dimensions.y * 0.4, 0);
     group.add(horizontalMesh);
     
     // Merge geometries
     group.updateMatrixWorld();
-    const mergedGeometry = new THREE.BufferGeometry();
-    const geometries: THREE.BufferGeometry[] = [];
+    const mergedGeometry = new BufferGeometry();
+    const geometries: BufferGeometry[] = [];
     
     group.children.forEach(child => {
-      if (child instanceof THREE.Mesh) {
+      if (child instanceof Mesh) {
         const geo = child.geometry.clone();
         geo.applyMatrix4(child.matrixWorld);
         geometries.push(geo);
       }
     });
     
-    return THREE.BufferGeometryUtils.mergeGeometries(geometries) || new THREE.BoxGeometry(1, 1, 1);
+    return BufferGeometryUtils.mergeGeometries(geometries) || new BoxGeometry(1, 1, 1);
   }
 
-  private createHousingGeometry(dimensions: { x: number; y: number; z: number }): THREE.BufferGeometry {
+  private createHousingGeometry(dimensions: { x: number; y: number; z: number }): BufferGeometry {
     // Create a hollow box (housing)
-    const outerGeometry = new THREE.BoxGeometry(dimensions.x, dimensions.y, dimensions.z);
-    const innerGeometry = new THREE.BoxGeometry(
+    const outerGeometry = new BoxGeometry(dimensions.x, dimensions.y, dimensions.z);
+    const innerGeometry = new BoxGeometry(
       dimensions.x * 0.8,
       dimensions.y * 0.8,
       dimensions.z * 0.8
@@ -347,76 +362,76 @@ export class AIEngine {
     return outerGeometry;
   }
 
-  private createShaftGeometry(dimensions: { x: number; y: number; z: number }): THREE.BufferGeometry {
+  private createShaftGeometry(dimensions: { x: number; y: number; z: number }): BufferGeometry {
     const radius = Math.min(dimensions.x, dimensions.z) / 2;
     const height = dimensions.y;
-    return new THREE.CylinderGeometry(radius, radius, height, 32);
+    return new CylinderGeometry(radius, radius, height, 32);
   }
 
-  private createBearingGeometry(dimensions: { x: number; y: number; z: number }): THREE.BufferGeometry {
+  private createBearingGeometry(dimensions: { x: number; y: number; z: number }): BufferGeometry {
     const outerRadius = dimensions.x / 2;
     const innerRadius = outerRadius * 0.6;
     const height = dimensions.z;
     
     // Create outer ring
-    const outerGeometry = new THREE.CylinderGeometry(outerRadius, outerRadius, height, 32);
+    const outerGeometry = new CylinderGeometry(outerRadius, outerRadius, height, 32);
     
     // For now, return outer geometry (CSG subtraction would be needed for inner hole)
     return outerGeometry;
   }
 
-  private createFastenerGeometry(dimensions: { x: number; y: number; z: number }): THREE.BufferGeometry {
+  private createFastenerGeometry(dimensions: { x: number; y: number; z: number }): BufferGeometry {
     // Create a simple screw/bolt
     const headRadius = dimensions.x / 2;
     const shaftRadius = headRadius * 0.6;
     const headHeight = dimensions.z * 0.3;
     const shaftHeight = dimensions.y - headHeight;
     
-    const group = new THREE.Group();
+    const group = new Group();
     
     // Head
-    const head = new THREE.CylinderGeometry(headRadius, headRadius, headHeight, 6);
-    const headMesh = new THREE.Mesh(head);
+    const head = new CylinderGeometry(headRadius, headRadius, headHeight, 6);
+    const headMesh = new Mesh(head);
     headMesh.position.set(0, shaftHeight / 2 + headHeight / 2, 0);
     group.add(headMesh);
     
     // Shaft
-    const shaft = new THREE.CylinderGeometry(shaftRadius, shaftRadius, shaftHeight, 16);
-    const shaftMesh = new THREE.Mesh(shaft);
+    const shaft = new CylinderGeometry(shaftRadius, shaftRadius, shaftHeight, 16);
+    const shaftMesh = new Mesh(shaft);
     shaftMesh.position.set(0, -headHeight / 2, 0);
     group.add(shaftMesh);
     
     // Merge geometries
     group.updateMatrixWorld();
-    const geometries: THREE.BufferGeometry[] = [];
+    const geometries: BufferGeometry[] = [];
     
     group.children.forEach(child => {
-      if (child instanceof THREE.Mesh) {
+      if (child instanceof Mesh) {
         const geo = child.geometry.clone();
         geo.applyMatrix4(child.matrixWorld);
         geometries.push(geo);
       }
     });
     
-    return THREE.BufferGeometryUtils.mergeGeometries(geometries) || new THREE.CylinderGeometry(0.5, 0.5, 2, 16);
+    return BufferGeometryUtils.mergeGeometries(geometries) || new CylinderGeometry(0.5, 0.5, 2, 16);
   }
 
-  private createPlateGeometry(dimensions: { x: number; y: number; z: number }): THREE.BufferGeometry {
+  private createPlateGeometry(dimensions: { x: number; y: number; z: number }): BufferGeometry {
     // Create a thin plate
     const thickness = Math.min(dimensions.y, dimensions.z) * 0.1;
-    return new THREE.BoxGeometry(dimensions.x, thickness, dimensions.z);
+    return new BoxGeometry(dimensions.x, thickness, dimensions.z);
   }
 
-  private createPipeGeometry(dimensions: { x: number; y: number; z: number }): THREE.BufferGeometry {
+  private createPipeGeometry(dimensions: { x: number; y: number; z: number }): BufferGeometry {
     const outerRadius = dimensions.x / 2;
     const innerRadius = outerRadius * 0.7;
     const height = dimensions.y;
     
     // For now, return outer cylinder (CSG subtraction would be needed for hollow)
-    return new THREE.CylinderGeometry(outerRadius, outerRadius, height, 32);
+    return new CylinderGeometry(outerRadius, outerRadius, height, 32);
   }
 
-  private createMaterialFromPrompt(prompt: string, materialType?: string): THREE.Material {
+  private createMaterialFromPrompt(prompt: string, materialType?: string): Material {
     const lowerPrompt = prompt.toLowerCase();
     
     let color = 0x888888; // Default gray
@@ -450,7 +465,7 @@ export class AIEngine {
     else if (lowerPrompt.includes('black')) color = 0x000000;
     else if (lowerPrompt.includes('white')) color = 0xffffff;
     
-    return new THREE.MeshStandardMaterial({
+    return new MeshStandardMaterial({
       color,
       metalness,
       roughness
@@ -495,8 +510,8 @@ export class AIEngine {
     const geometry = object.geometry;
     
     // Calculate basic metrics
-    const boundingBox = new THREE.Box3().setFromObject(object.mesh);
-    const size = boundingBox.getSize(new THREE.Vector3());
+    const boundingBox = new Box3().setFromObject(object.mesh);
+    const size = boundingBox.getSize(new Vector3());
     const volume = size.x * size.y * size.z; // Simplified volume calculation
     
     return {
@@ -508,7 +523,7 @@ export class AIEngine {
     };
   }
 
-  private calculateSurfaceArea(geometry: THREE.BufferGeometry): number {
+  private calculateSurfaceArea(geometry: BufferGeometry): number {
     // Simplified surface area calculation
     const position = geometry.attributes.position;
     const index = geometry.index;
@@ -516,10 +531,10 @@ export class AIEngine {
     if (!position || !index) return 0;
     
     let area = 0;
-    const triangle = new THREE.Triangle();
-    const a = new THREE.Vector3();
-    const b = new THREE.Vector3();
-    const c = new THREE.Vector3();
+    const triangle = new Triangle();
+    const a = new Vector3();
+    const b = new Vector3();
+    const c = new Vector3();
     
     for (let i = 0; i < index.count; i += 3) {
       const i1 = index.getX(i);
@@ -538,10 +553,10 @@ export class AIEngine {
   }
 
   private async applyOptimizations(
-    geometry: THREE.BufferGeometry,
+    geometry: BufferGeometry,
     goals: string[],
     constraints?: any
-  ): Promise<THREE.BufferGeometry> {
+  ): Promise<BufferGeometry> {
     // Simplified optimization - in reality this would use complex algorithms
     const optimizedGeometry = geometry.clone();
     
@@ -582,7 +597,7 @@ export class AIEngine {
   }
 
   // Text-to-3D API Integration (placeholder for future implementation)
-  async generateFromText(prompt: string): Promise<THREE.BufferGeometry | null> {
+  async generateFromText(prompt: string): Promise<BufferGeometry | null> {
     try {
       // This would integrate with services like OpenAI's text-to-3D or similar
       console.log('Text-to-3D generation not yet implemented');

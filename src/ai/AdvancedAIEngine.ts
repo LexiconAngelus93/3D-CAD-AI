@@ -1,4 +1,20 @@
-import * as THREE from 'three';
+import {
+   Box3,
+  BoxGeometry,
+  BufferGeometry,
+  ConeGeometry,
+  CylinderGeometry,
+  ExtrudeGeometry,
+  Material,
+  Mesh,
+  MeshStandardMaterial,
+  Object3D,
+  Scene,
+  Shape,
+  SphereGeometry,
+  TorusGeometry,
+  Vector3 
+} from 'three';
 import * as tf from '@tensorflow/tfjs';
 
 export interface AIModelRequest {
@@ -50,7 +66,7 @@ export interface AIDesignSuggestion {
     estimatedTime: number;
     difficulty: 'easy' | 'medium' | 'hard';
   };
-  preview?: THREE.Object3D;
+  preview?: Object3D;
 }
 
 export interface AIAnalysisResult {
@@ -66,7 +82,7 @@ export interface AIAnalysisResult {
     type: string;
     severity: 'low' | 'medium' | 'high' | 'critical';
     description: string;
-    location?: THREE.Vector3;
+    location?: Vector3;
     solution?: string;
   }[];
   optimizationOpportunities: {
@@ -83,12 +99,12 @@ export class AdvancedAIEngine {
   private analysisNetwork: tf.LayersModel | null = null;
   private featureRecognitionNetwork: tf.LayersModel | null = null;
   private isInitialized: boolean = false;
-  private scene: THREE.Scene;
+  private scene: Scene;
   private knowledgeBase: Map<string, any> = new Map();
   private designPatterns: Map<string, any> = new Map();
   private materialDatabase: Map<string, any> = new Map();
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: Scene) {
     this.scene = scene;
     this.initializeKnowledgeBase();
     this.initializeDesignPatterns();
@@ -230,7 +246,7 @@ export class AdvancedAIEngine {
   }
 
   // Advanced Model Generation
-  async generateAdvancedModel(request: AIModelRequest): Promise<THREE.Object3D> {
+  async generateAdvancedModel(request: AIModelRequest): Promise<Object3D> {
     if (!this.isInitialized || !this.modelGenerationNetwork) {
       throw new Error('AI Engine not initialized');
     }
@@ -254,7 +270,7 @@ export class AdvancedAIEngine {
       const material = await this.generateMaterial(request);
       
       // Create final mesh
-      const mesh = new THREE.Mesh(geometry, material);
+      const mesh = new Mesh(geometry, material);
       mesh.userData = {
         type: 'ai_generated',
         prompt: request.prompt,
@@ -359,7 +375,7 @@ export class AdvancedAIEngine {
     return Array.from(parameters);
   }
 
-  private async createGeometryFromParameters(parameters: number[], request: AIModelRequest): Promise<THREE.BufferGeometry> {
+  private async createGeometryFromParameters(parameters: number[], request: AIModelRequest): Promise<BufferGeometry> {
     // Interpret parameters to create geometry
     const shapeType = Math.floor(parameters[0] * 8); // 8 different shape types
     const dimensions = {
@@ -368,23 +384,23 @@ export class AdvancedAIEngine {
       z: parameters[3] * 50 + 1
     };
     
-    let geometry: THREE.BufferGeometry;
+    let geometry: BufferGeometry;
     
     switch (shapeType) {
       case 0: // Box
-        geometry = new THREE.BoxGeometry(dimensions.x, dimensions.y, dimensions.z);
+        geometry = new BoxGeometry(dimensions.x, dimensions.y, dimensions.z);
         break;
       case 1: // Sphere
-        geometry = new THREE.SphereGeometry(dimensions.x / 2, 32, 16);
+        geometry = new SphereGeometry(dimensions.x / 2, 32, 16);
         break;
       case 2: // Cylinder
-        geometry = new THREE.CylinderGeometry(dimensions.x / 2, dimensions.x / 2, dimensions.y, 32);
+        geometry = new CylinderGeometry(dimensions.x / 2, dimensions.x / 2, dimensions.y, 32);
         break;
       case 3: // Cone
-        geometry = new THREE.ConeGeometry(dimensions.x / 2, dimensions.y, 32);
+        geometry = new ConeGeometry(dimensions.x / 2, dimensions.y, 32);
         break;
       case 4: // Torus
-        geometry = new THREE.TorusGeometry(dimensions.x / 2, dimensions.x / 8, 16, 100);
+        geometry = new TorusGeometry(dimensions.x / 2, dimensions.x / 8, 16, 100);
         break;
       case 5: // Gear (approximated with cylinder with teeth)
         geometry = this.createGearGeometry(dimensions.x / 2, dimensions.y, Math.floor(parameters[4] * 24 + 8));
@@ -408,8 +424,8 @@ export class AdvancedAIEngine {
     return geometry;
   }
 
-  private createGearGeometry(radius: number, height: number, teeth: number): THREE.BufferGeometry {
-    const shape = new THREE.Shape();
+  private createGearGeometry(radius: number, height: number, teeth: number): BufferGeometry {
+    const shape = new Shape();
     const toothHeight = radius * 0.2;
     const toothWidth = (2 * Math.PI * radius) / teeth / 2;
     
@@ -442,11 +458,11 @@ export class AdvancedAIEngine {
       bevelEnabled: false
     };
     
-    return new THREE.ExtrudeGeometry(shape, extrudeSettings);
+    return new ExtrudeGeometry(shape, extrudeSettings);
   }
 
-  private createLBracketGeometry(width: number, height: number, thickness: number): THREE.BufferGeometry {
-    const shape = new THREE.Shape();
+  private createLBracketGeometry(width: number, height: number, thickness: number): BufferGeometry {
+    const shape = new Shape();
     
     // Create L-bracket profile
     shape.moveTo(0, 0);
@@ -465,15 +481,15 @@ export class AdvancedAIEngine {
       bevelSegments: 3
     };
     
-    return new THREE.ExtrudeGeometry(shape, extrudeSettings);
+    return new ExtrudeGeometry(shape, extrudeSettings);
   }
 
-  private createComplexGeometry(parameters: number[], dimensions: { x: number; y: number; z: number }): THREE.BufferGeometry {
+  private createComplexGeometry(parameters: number[], dimensions: { x: number; y: number; z: number }): BufferGeometry {
     // Create a complex geometry using multiple primitives
-    const geometries: THREE.BufferGeometry[] = [];
+    const geometries: BufferGeometry[] = [];
     
     // Base shape
-    const baseGeometry = new THREE.BoxGeometry(dimensions.x, dimensions.y * 0.3, dimensions.z);
+    const baseGeometry = new BoxGeometry(dimensions.x, dimensions.y * 0.3, dimensions.z);
     geometries.push(baseGeometry);
     
     // Add features based on parameters
@@ -484,21 +500,21 @@ export class AdvancedAIEngine {
       const posZ = (parameters[i * 5 + 3] - 0.5) * dimensions.z;
       const scale = parameters[i * 5 + 4] * 0.5 + 0.1;
       
-      let featureGeometry: THREE.BufferGeometry;
+      let featureGeometry: BufferGeometry;
       
       switch (featureType) {
         case 0:
-          featureGeometry = new THREE.BoxGeometry(
+          featureGeometry = new BoxGeometry(
             dimensions.x * scale,
             dimensions.y * scale,
             dimensions.z * scale
           );
           break;
         case 1:
-          featureGeometry = new THREE.SphereGeometry(dimensions.x * scale * 0.5, 16, 8);
+          featureGeometry = new SphereGeometry(dimensions.x * scale * 0.5, 16, 8);
           break;
         default:
-          featureGeometry = new THREE.CylinderGeometry(
+          featureGeometry = new CylinderGeometry(
             dimensions.x * scale * 0.3,
             dimensions.x * scale * 0.3,
             dimensions.y * scale,
@@ -514,12 +530,12 @@ export class AdvancedAIEngine {
     return this.mergeGeometries(geometries);
   }
 
-  private mergeGeometries(geometries: THREE.BufferGeometry[]): THREE.BufferGeometry {
+  private mergeGeometries(geometries: BufferGeometry[]): BufferGeometry {
     // Simple geometry merging - in a real implementation, this would use CSG operations
-    const mergedGeometry = new THREE.BufferGeometry();
+    const mergedGeometry = new BufferGeometry();
     
     if (geometries.length === 0) {
-      return new THREE.BoxGeometry(1, 1, 1);
+      return new BoxGeometry(1, 1, 1);
     }
     
     // For now, just return the first geometry
@@ -527,46 +543,46 @@ export class AdvancedAIEngine {
     return geometries[0];
   }
 
-  private addFillets(geometry: THREE.BufferGeometry, radius: number): THREE.BufferGeometry {
+  private addFillets(geometry: BufferGeometry, radius: number): BufferGeometry {
     // Simplified fillet addition - in practice, this would modify vertices
     return geometry;
   }
 
-  private addHoles(geometry: THREE.BufferGeometry, count: number): THREE.BufferGeometry {
+  private addHoles(geometry: BufferGeometry, count: number): BufferGeometry {
     // Simplified hole addition - in practice, this would use CSG operations
     return geometry;
   }
 
-  private async generateMaterial(request: AIModelRequest): Promise<THREE.Material> {
+  private async generateMaterial(request: AIModelRequest): Promise<Material> {
     const materialType = request.constraints?.materialType || 'metal';
     const style = request.style || 'mechanical';
     
-    let material: THREE.Material;
+    let material: Material;
     
     switch (materialType) {
       case 'metal':
-        material = new THREE.MeshStandardMaterial({
+        material = new MeshStandardMaterial({
           color: style === 'mechanical' ? 0x888888 : 0xaaaaaa,
           metalness: 0.8,
           roughness: 0.2
         });
         break;
       case 'plastic':
-        material = new THREE.MeshStandardMaterial({
+        material = new MeshStandardMaterial({
           color: style === 'electronic' ? 0x2a2a2a : 0x4a90e2,
           metalness: 0.1,
           roughness: 0.6
         });
         break;
       case 'wood':
-        material = new THREE.MeshStandardMaterial({
+        material = new MeshStandardMaterial({
           color: 0x8b4513,
           metalness: 0.0,
           roughness: 0.8
         });
         break;
       default:
-        material = new THREE.MeshStandardMaterial({
+        material = new MeshStandardMaterial({
           color: 0x666666,
           metalness: 0.5,
           roughness: 0.5
@@ -789,18 +805,18 @@ export class AdvancedAIEngine {
     }
   }
 
-  private extractAnalysisFeatures(object: THREE.Object3D): number[] {
+  private extractAnalysisFeatures(object: Object3D): number[] {
     const features = new Array(128).fill(0);
     
     // Extract geometric features
-    if (object instanceof THREE.Mesh && object.geometry) {
+    if (object instanceof Mesh && object.geometry) {
       const geometry = object.geometry;
-      const boundingBox = new THREE.Box3().setFromObject(object);
+      const boundingBox = new Box3().setFromObject(object);
       
       // Size features
-      features[0] = boundingBox.getSize(new THREE.Vector3()).x / 100;
-      features[1] = boundingBox.getSize(new THREE.Vector3()).y / 100;
-      features[2] = boundingBox.getSize(new THREE.Vector3()).z / 100;
+      features[0] = boundingBox.getSize(new Vector3()).x / 100;
+      features[1] = boundingBox.getSize(new Vector3()).y / 100;
+      features[2] = boundingBox.getSize(new Vector3()).z / 100;
       
       // Complexity features
       if (geometry.attributes.position) {
@@ -808,7 +824,7 @@ export class AdvancedAIEngine {
       }
       
       // Material features
-      if (object.material instanceof THREE.MeshStandardMaterial) {
+      if (object.material instanceof MeshStandardMaterial) {
         features[4] = object.material.metalness;
         features[5] = object.material.roughness;
         features[6] = object.material.color.r;
@@ -820,13 +836,13 @@ export class AdvancedAIEngine {
     return features;
   }
 
-  private async identifyPotentialIssues(object: THREE.Object3D): Promise<any[]> {
+  private async identifyPotentialIssues(object: Object3D): Promise<any[]> {
     const issues = [];
     
     // Check for common design issues
-    if (object instanceof THREE.Mesh && object.geometry) {
-      const boundingBox = new THREE.Box3().setFromObject(object);
-      const size = boundingBox.getSize(new THREE.Vector3());
+    if (object instanceof Mesh && object.geometry) {
+      const boundingBox = new Box3().setFromObject(object);
+      const size = boundingBox.getSize(new Vector3());
       
       // Check for thin walls
       if (size.x < 1 || size.y < 1 || size.z < 1) {
@@ -834,7 +850,7 @@ export class AdvancedAIEngine {
           type: 'thin_wall',
           severity: 'medium',
           description: 'Some dimensions are very small, which may cause manufacturing issues',
-          location: boundingBox.getCenter(new THREE.Vector3()),
+          location: boundingBox.getCenter(new Vector3()),
           solution: 'Consider increasing minimum wall thickness to 2mm or more'
         });
       }
@@ -916,10 +932,10 @@ export class AdvancedAIEngine {
     return recognizedFeatures;
   }
 
-  private extractGeometricFeatures(object: THREE.Object3D): number[] {
+  private extractGeometricFeatures(object: Object3D): number[] {
     const features = new Array(1024).fill(0);
     
-    if (object instanceof THREE.Mesh && object.geometry) {
+    if (object instanceof Mesh && object.geometry) {
       const geometry = object.geometry;
       
       // Extract vertex-based features

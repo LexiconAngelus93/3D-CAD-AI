@@ -1,4 +1,25 @@
-import * as THREE from 'three';
+import {
+   Box3,
+  BoxGeometry,
+  BufferGeometry,
+  CatmullRomCurve3,
+  ConeGeometry,
+  CubicBezierCurve3,
+  Curve,
+  CylinderGeometry,
+  ExtrudeGeometry,
+  ExtrudeGeometryOptions,
+  LatheGeometry,
+  LineCurve3,
+  QuadraticBezierCurve3,
+  Shape,
+  SphereGeometry,
+  TorusGeometry,
+  Triangle,
+  TubeGeometry,
+  Vector2,
+  Vector3 
+} from 'three';
 
 export interface GeometryOperation {
   type: 'extrude' | 'revolve' | 'sweep' | 'loft' | 'boolean';
@@ -6,7 +27,7 @@ export interface GeometryOperation {
 }
 
 export interface ExtrudeParameters {
-  profile: THREE.Shape;
+  profile: Shape;
   depth: number;
   bevelEnabled?: boolean;
   bevelThickness?: number;
@@ -15,15 +36,15 @@ export interface ExtrudeParameters {
 }
 
 export interface RevolveParameters {
-  profile: THREE.Shape;
-  axis: THREE.Vector3;
+  profile: Shape;
+  axis: Vector3;
   angle: number;
   segments?: number;
 }
 
 export interface SweepParameters {
-  profile: THREE.Shape;
-  path: THREE.Curve<THREE.Vector3>;
+  profile: Shape;
+  path: Curve<Vector3>;
   segments?: number;
 }
 
@@ -41,12 +62,12 @@ export class GeometryEngine {
   }
 
   // Basic Primitive Creation
-  createBox(width: number, height: number, depth: number): THREE.BoxGeometry {
-    return new THREE.BoxGeometry(width, height, depth);
+  createBox(width: number, height: number, depth: number): BoxGeometry {
+    return new BoxGeometry(width, height, depth);
   }
 
-  createSphere(radius: number, widthSegments: number = 32, heightSegments: number = 32): THREE.SphereGeometry {
-    return new THREE.SphereGeometry(radius, widthSegments, heightSegments);
+  createSphere(radius: number, widthSegments: number = 32, heightSegments: number = 32): SphereGeometry {
+    return new SphereGeometry(radius, widthSegments, heightSegments);
   }
 
   createCylinder(
@@ -54,12 +75,12 @@ export class GeometryEngine {
     radiusBottom: number,
     height: number,
     radialSegments: number = 32
-  ): THREE.CylinderGeometry {
-    return new THREE.CylinderGeometry(radiusTop, radiusBottom, height, radialSegments);
+  ): CylinderGeometry {
+    return new CylinderGeometry(radiusTop, radiusBottom, height, radialSegments);
   }
 
-  createCone(radius: number, height: number, radialSegments: number = 32): THREE.ConeGeometry {
-    return new THREE.ConeGeometry(radius, height, radialSegments);
+  createCone(radius: number, height: number, radialSegments: number = 32): ConeGeometry {
+    return new ConeGeometry(radius, height, radialSegments);
   }
 
   createTorus(
@@ -67,13 +88,13 @@ export class GeometryEngine {
     tube: number,
     radialSegments: number = 16,
     tubularSegments: number = 100
-  ): THREE.TorusGeometry {
-    return new THREE.TorusGeometry(radius, tube, radialSegments, tubularSegments);
+  ): TorusGeometry {
+    return new TorusGeometry(radius, tube, radialSegments, tubularSegments);
   }
 
   // Advanced Geometry Operations
-  extrude(parameters: ExtrudeParameters): THREE.ExtrudeGeometry {
-    const extrudeSettings: THREE.ExtrudeGeometryOptions = {
+  extrude(parameters: ExtrudeParameters): ExtrudeGeometry {
+    const extrudeSettings: ExtrudeGeometryOptions = {
       depth: parameters.depth,
       bevelEnabled: parameters.bevelEnabled || false,
       bevelThickness: parameters.bevelThickness || 0.1,
@@ -81,32 +102,32 @@ export class GeometryEngine {
       bevelSegments: parameters.bevelSegments || 3,
     };
 
-    return new THREE.ExtrudeGeometry(parameters.profile, extrudeSettings);
+    return new ExtrudeGeometry(parameters.profile, extrudeSettings);
   }
 
-  revolve(parameters: RevolveParameters): THREE.LatheGeometry {
+  revolve(parameters: RevolveParameters): LatheGeometry {
     // Convert shape to points for lathe geometry
     const points = this.shapeToPoints(parameters.profile);
     const segments = parameters.segments || 32;
     const phiStart = 0;
     const phiLength = (parameters.angle * Math.PI) / 180;
 
-    return new THREE.LatheGeometry(points, segments, phiStart, phiLength);
+    return new LatheGeometry(points, segments, phiStart, phiLength);
   }
 
-  sweep(parameters: SweepParameters): THREE.TubeGeometry {
+  sweep(parameters: SweepParameters): TubeGeometry {
     // Create a tube geometry along the path
     const segments = parameters.segments || 64;
     const radius = 0.1; // This would be derived from the profile
     const radialSegments = 8;
     const closed = false;
 
-    return new THREE.TubeGeometry(parameters.path, segments, radius, radialSegments, closed);
+    return new TubeGeometry(parameters.path, segments, radius, radialSegments, closed);
   }
 
   // Shape Creation Utilities
-  createRectangleShape(width: number, height: number): THREE.Shape {
-    const shape = new THREE.Shape();
+  createRectangleShape(width: number, height: number): Shape {
+    const shape = new Shape();
     shape.moveTo(-width / 2, -height / 2);
     shape.lineTo(width / 2, -height / 2);
     shape.lineTo(width / 2, height / 2);
@@ -115,18 +136,18 @@ export class GeometryEngine {
     return shape;
   }
 
-  createCircleShape(radius: number): THREE.Shape {
-    const shape = new THREE.Shape();
+  createCircleShape(radius: number): Shape {
+    const shape = new Shape();
     shape.absarc(0, 0, radius, 0, Math.PI * 2, false);
     return shape;
   }
 
-  createPolygonShape(vertices: THREE.Vector2[]): THREE.Shape {
+  createPolygonShape(vertices: Vector2[]): Shape {
     if (vertices.length < 3) {
       throw new Error('Polygon must have at least 3 vertices');
     }
 
-    const shape = new THREE.Shape();
+    const shape = new Shape();
     shape.moveTo(vertices[0].x, vertices[0].y);
     
     for (let i = 1; i < vertices.length; i++) {
@@ -138,52 +159,52 @@ export class GeometryEngine {
   }
 
   // Curve Creation
-  createLineCurve(start: THREE.Vector3, end: THREE.Vector3): THREE.LineCurve3 {
-    return new THREE.LineCurve3(start, end);
+  createLineCurve(start: Vector3, end: Vector3): LineCurve3 {
+    return new LineCurve3(start, end);
   }
 
   createQuadraticBezierCurve(
-    start: THREE.Vector3,
-    control: THREE.Vector3,
-    end: THREE.Vector3
-  ): THREE.QuadraticBezierCurve3 {
-    return new THREE.QuadraticBezierCurve3(start, control, end);
+    start: Vector3,
+    control: Vector3,
+    end: Vector3
+  ): QuadraticBezierCurve3 {
+    return new QuadraticBezierCurve3(start, control, end);
   }
 
   createCubicBezierCurve(
-    start: THREE.Vector3,
-    control1: THREE.Vector3,
-    control2: THREE.Vector3,
-    end: THREE.Vector3
-  ): THREE.CubicBezierCurve3 {
-    return new THREE.CubicBezierCurve3(start, control1, control2, end);
+    start: Vector3,
+    control1: Vector3,
+    control2: Vector3,
+    end: Vector3
+  ): CubicBezierCurve3 {
+    return new CubicBezierCurve3(start, control1, control2, end);
   }
 
-  createSplineCurve(points: THREE.Vector3[]): THREE.CatmullRomCurve3 {
-    return new THREE.CatmullRomCurve3(points);
+  createSplineCurve(points: Vector3[]): CatmullRomCurve3 {
+    return new CatmullRomCurve3(points);
   }
 
   // Boolean Operations (simplified - would use CSG library in production)
-  union(geometry1: THREE.BufferGeometry, geometry2: THREE.BufferGeometry): THREE.BufferGeometry {
+  union(geometry1: BufferGeometry, geometry2: BufferGeometry): BufferGeometry {
     // This is a placeholder - real implementation would use CSG
     console.warn('Boolean union not fully implemented - returning first geometry');
     return geometry1.clone();
   }
 
-  subtract(geometry1: THREE.BufferGeometry, geometry2: THREE.BufferGeometry): THREE.BufferGeometry {
+  subtract(geometry1: BufferGeometry, geometry2: BufferGeometry): BufferGeometry {
     // This is a placeholder - real implementation would use CSG
     console.warn('Boolean subtract not fully implemented - returning first geometry');
     return geometry1.clone();
   }
 
-  intersect(geometry1: THREE.BufferGeometry, geometry2: THREE.BufferGeometry): THREE.BufferGeometry {
+  intersect(geometry1: BufferGeometry, geometry2: BufferGeometry): BufferGeometry {
     // This is a placeholder - real implementation would use CSG
     console.warn('Boolean intersect not fully implemented - returning first geometry');
     return geometry1.clone();
   }
 
   // Geometry Analysis
-  calculateVolume(geometry: THREE.BufferGeometry): number {
+  calculateVolume(geometry: BufferGeometry): number {
     // Calculate volume using mesh analysis
     const position = geometry.attributes.position;
     const index = geometry.index;
@@ -193,10 +214,10 @@ export class GeometryEngine {
     }
 
     let volume = 0;
-    const triangle = new THREE.Triangle();
-    const a = new THREE.Vector3();
-    const b = new THREE.Vector3();
-    const c = new THREE.Vector3();
+    const triangle = new Triangle();
+    const a = new Vector3();
+    const b = new Vector3();
+    const c = new Vector3();
 
     for (let i = 0; i < index.count; i += 3) {
       const i1 = index.getX(i);
@@ -217,7 +238,7 @@ export class GeometryEngine {
     return Math.abs(volume);
   }
 
-  calculateSurfaceArea(geometry: THREE.BufferGeometry): number {
+  calculateSurfaceArea(geometry: BufferGeometry): number {
     const position = geometry.attributes.position;
     const index = geometry.index;
     
@@ -226,10 +247,10 @@ export class GeometryEngine {
     }
 
     let area = 0;
-    const triangle = new THREE.Triangle();
-    const a = new THREE.Vector3();
-    const b = new THREE.Vector3();
-    const c = new THREE.Vector3();
+    const triangle = new Triangle();
+    const a = new Vector3();
+    const b = new Vector3();
+    const c = new Vector3();
 
     for (let i = 0; i < index.count; i += 3) {
       const i1 = index.getX(i);
@@ -247,33 +268,33 @@ export class GeometryEngine {
     return area;
   }
 
-  calculateBoundingBox(geometry: THREE.BufferGeometry): THREE.Box3 {
+  calculateBoundingBox(geometry: BufferGeometry): Box3 {
     geometry.computeBoundingBox();
-    return geometry.boundingBox || new THREE.Box3();
+    return geometry.boundingBox || new Box3();
   }
 
   // Mesh Operations
-  subdivide(geometry: THREE.BufferGeometry, iterations: number = 1): THREE.BufferGeometry {
+  subdivide(geometry: BufferGeometry, iterations: number = 1): BufferGeometry {
     // This would use a subdivision algorithm like Loop or Catmull-Clark
     console.warn('Subdivision not implemented - returning original geometry');
     return geometry.clone();
   }
 
-  smooth(geometry: THREE.BufferGeometry, factor: number = 0.5): THREE.BufferGeometry {
+  smooth(geometry: BufferGeometry, factor: number = 0.5): BufferGeometry {
     // Apply Laplacian smoothing
     console.warn('Smoothing not implemented - returning original geometry');
     return geometry.clone();
   }
 
-  decimate(geometry: THREE.BufferGeometry, targetFaces: number): THREE.BufferGeometry {
+  decimate(geometry: BufferGeometry, targetFaces: number): BufferGeometry {
     // Reduce polygon count while preserving shape
     console.warn('Decimation not implemented - returning original geometry');
     return geometry.clone();
   }
 
   // Utility Methods
-  private shapeToPoints(shape: THREE.Shape): THREE.Vector2[] {
-    const points: THREE.Vector2[] = [];
+  private shapeToPoints(shape: Shape): Vector2[] {
+    const points: Vector2[] = [];
     const curves = shape.curves;
 
     for (const curve of curves) {
@@ -285,7 +306,7 @@ export class GeometryEngine {
   }
 
   // Validation
-  validateGeometry(geometry: THREE.BufferGeometry): boolean {
+  validateGeometry(geometry: BufferGeometry): boolean {
     if (!geometry.attributes.position) {
       return false;
     }

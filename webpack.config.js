@@ -93,5 +93,14 @@ module.exports = {
       },
     },
   },
+  stats: {
+    warnings: false,
+  },
+  ignoreWarnings: [
+    {
+      module: /three/,
+    },
+    /export .* was not found in/,
+  ],
 };
 

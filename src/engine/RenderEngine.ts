@@ -1,4 +1,21 @@
-import * as THREE from 'three';
+import {
+   ACESFilmicToneMapping,
+  AmbientLight,
+  Box3,
+  DirectionalLight,
+  Material,
+  Mesh,
+  Object3D,
+  PCFSoftShadowMap,
+  PerspectiveCamera,
+  Raycaster,
+  SRGBColorSpace,
+  Scene,
+  Spherical,
+  Vector2,
+  Vector3,
+  WebGLRenderer 
+} from 'three';
 
 export interface RenderSettings {
   antialias: boolean;
@@ -12,14 +29,14 @@ export interface RenderSettings {
 }
 
 export class RenderEngine {
-  private scene: THREE.Scene;
-  private camera: THREE.PerspectiveCamera;
-  private renderer: THREE.WebGLRenderer | null = null;
+  private scene: Scene;
+  private camera: PerspectiveCamera;
+  private renderer: WebGLRenderer | null = null;
   private container: HTMLElement | null = null;
   
   private controls: any = null; // Would be OrbitControls in real implementation
-  private raycaster: THREE.Raycaster;
-  private mouse: THREE.Vector2;
+  private raycaster: Raycaster;
+  private mouse: Vector2;
   
   private settings: RenderSettings = {
     antialias: true,
@@ -35,11 +52,11 @@ export class RenderEngine {
   private animationId: number | null = null;
   private isRendering: boolean = false;
 
-  constructor(scene: THREE.Scene, camera: THREE.PerspectiveCamera) {
+  constructor(scene: Scene, camera: PerspectiveCamera) {
     this.scene = scene;
     this.camera = camera;
-    this.raycaster = new THREE.Raycaster();
-    this.mouse = new THREE.Vector2();
+    this.raycaster = new Raycaster();
+    this.mouse = new Vector2();
   }
 
   async initialize(): Promise<void> {
@@ -56,7 +73,7 @@ export class RenderEngine {
   private createRenderer(): void {
     if (!this.container) return;
 
-    this.renderer = new THREE.WebGLRenderer({
+    this.renderer = new WebGLRenderer({
       antialias: this.settings.antialias,
       alpha: true,
       powerPreference: 'high-performance',
@@ -68,11 +85,11 @@ export class RenderEngine {
     
     if (this.settings.shadows) {
       this.renderer.shadowMap.enabled = true;
-      this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      this.renderer.shadowMap.type = PCFSoftShadowMap;
     }
 
-    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.outputColorSpace = SRGBColorSpace;
+    this.renderer.toneMapping = ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1;
 
     this.container.appendChild(this.renderer.domElement);
@@ -103,7 +120,7 @@ export class RenderEngine {
       const deltaY = event.clientY - mouseY;
 
       // Rotate camera around target
-      const spherical = new THREE.Spherical();
+      const spherical = new Spherical();
       spherical.setFromVector3(this.camera.position);
       spherical.theta -= deltaX * 0.01;
       spherical.phi += deltaY * 0.01;
@@ -180,7 +197,7 @@ export class RenderEngine {
     this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
   }
 
-  private onObjectClick(object: THREE.Object3D): void {
+  private onObjectClick(object: Object3D): void {
     // Emit object selection event
     const event = new CustomEvent('objectSelected', {
       detail: { objectId: object.userData.id }
@@ -241,9 +258,9 @@ export class RenderEngine {
   private updateLighting(): void {
     // Find and update lights in the scene
     this.scene.traverse((object) => {
-      if (object instanceof THREE.AmbientLight) {
+      if (object instanceof AmbientLight) {
         object.intensity = this.settings.ambientLightIntensity;
-      } else if (object instanceof THREE.DirectionalLight) {
+      } else if (object instanceof DirectionalLight) {
         object.intensity = this.settings.directionalLightIntensity;
       }
     });
@@ -251,7 +268,7 @@ export class RenderEngine {
 
   private updateWireframeMode(): void {
     this.scene.traverse((object) => {
-      if (object instanceof THREE.Mesh && object.material instanceof THREE.Material) {
+      if (object instanceof Mesh && object.material instanceof Material) {
         if ('wireframe' in object.material) {
           (object.material as any).wireframe = this.settings.wireframe;
         }
@@ -279,16 +296,16 @@ export class RenderEngine {
     this.camera.lookAt(0, 0, 0);
   }
 
-  fitToView(objects: THREE.Object3D[]): void {
+  fitToView(objects: Object3D[]): void {
     if (objects.length === 0) return;
 
-    const box = new THREE.Box3();
+    const box = new Box3();
     objects.forEach(object => {
       box.expandByObject(object);
     });
 
-    const center = box.getCenter(new THREE.Vector3());
-    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new Vector3());
+    const size = box.getSize(new Vector3());
     const maxDim = Math.max(size.x, size.y, size.z);
     const distance = maxDim / (2 * Math.tan(this.camera.fov * Math.PI / 360));
 
@@ -331,7 +348,7 @@ export class RenderEngine {
   takeScreenshot(width?: number, height?: number): string {
     if (!this.renderer) return '';
 
-    const originalSize = this.renderer.getSize(new THREE.Vector2());
+    const originalSize = this.renderer.getSize(new Vector2());
     
     if (width && height) {
       this.renderer.setSize(width, height);
@@ -351,7 +368,7 @@ export class RenderEngine {
   }
 
   // Getters
-  getRenderer(): THREE.WebGLRenderer | null {
+  getRenderer(): WebGLRenderer | null {
     return this.renderer;
   }
 

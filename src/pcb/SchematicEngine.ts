@@ -1,4 +1,16 @@
-import * as THREE from 'three';
+import {
+   BufferGeometry,
+  CircleGeometry,
+  DoubleSide,
+  Line,
+  LineBasicMaterial,
+  Mesh,
+  MeshBasicMaterial,
+  Object3D,
+  PlaneGeometry,
+  Scene,
+  Vector3 
+} from 'three';
 
 export interface SchematicComponent {
   id: string;
@@ -9,7 +21,7 @@ export interface SchematicComponent {
   rotation: number;
   pins: SchematicPin[];
   properties: Record<string, any>;
-  symbol?: THREE.Object3D;
+  symbol?: Object3D;
 }
 
 export interface SchematicPin {
@@ -90,13 +102,13 @@ export interface ComponentSymbol {
 export class SchematicEngine {
   private sheets: Map<string, SchematicSheet> = new Map();
   private currentSheet: SchematicSheet | null = null;
-  private scene: THREE.Scene;
+  private scene: Scene;
   private symbolLibrary: Map<string, ComponentSymbol> = new Map();
   private gridSize: number = 2.54; // Standard 0.1" grid
   private snapToGrid: boolean = true;
   private isInitialized: boolean = false;
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: Scene) {
     this.scene = scene;
   }
 
@@ -512,18 +524,18 @@ export class SchematicEngine {
   private create2DSheet(sheet: SchematicSheet): void {
     // Create sheet background
     const sheetDimensions = this.getSheetDimensions(sheet.size);
-    const geometry = new THREE.PlaneGeometry(sheetDimensions.width, sheetDimensions.height);
-    const material = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+    const geometry = new PlaneGeometry(sheetDimensions.width, sheetDimensions.height);
+    const material = new MeshBasicMaterial({ color: 0xffffff, side: DoubleSide });
     
-    const sheetMesh = new THREE.Mesh(geometry, material);
+    const sheetMesh = new Mesh(geometry, material);
     sheetMesh.name = `sheet_${sheet.id}`;
     sheetMesh.userData = { type: 'schematic_sheet', sheetId: sheet.id };
     
     this.scene.add(sheetMesh);
   }
 
-  private create2DSymbol(symbol: ComponentSymbol, position: { x: number; y: number }): THREE.Object3D {
-    const group = new THREE.Object3D();
+  private create2DSymbol(symbol: ComponentSymbol, position: { x: number; y: number }): Object3D {
+    const group = new Object3D();
 
     // Create symbol graphics
     symbol.graphics.forEach(graphic => {
@@ -532,37 +544,37 @@ export class SchematicEngine {
           if (graphic.points && graphic.points.length >= 2) {
             const width = Math.abs(graphic.points[1].x - graphic.points[0].x);
             const height = Math.abs(graphic.points[1].y - graphic.points[0].y);
-            const geometry = new THREE.PlaneGeometry(width, height);
-            const material = new THREE.MeshBasicMaterial({ 
+            const geometry = new PlaneGeometry(width, height);
+            const material = new MeshBasicMaterial({ 
               color: 0x000000, 
               transparent: true, 
               opacity: 0.1,
-              side: THREE.DoubleSide 
+              side: DoubleSide 
             });
-            const mesh = new THREE.Mesh(geometry, material);
+            const mesh = new Mesh(geometry, material);
             group.add(mesh);
           }
           break;
         case 'circle':
           if (graphic.center && graphic.radius) {
-            const geometry = new THREE.CircleGeometry(graphic.radius, 32);
-            const material = new THREE.MeshBasicMaterial({ 
+            const geometry = new CircleGeometry(graphic.radius, 32);
+            const material = new MeshBasicMaterial({ 
               color: 0x000000, 
               transparent: true, 
               opacity: 0.1,
-              side: THREE.DoubleSide 
+              side: DoubleSide 
             });
-            const mesh = new THREE.Mesh(geometry, material);
+            const mesh = new Mesh(geometry, material);
             mesh.position.set(graphic.center.x, graphic.center.y, 0);
             group.add(mesh);
           }
           break;
         case 'line':
           if (graphic.points && graphic.points.length >= 2) {
-            const points = graphic.points.map(p => new THREE.Vector3(p.x, p.y, 0));
-            const geometry = new THREE.BufferGeometry().setFromPoints(points);
-            const material = new THREE.LineBasicMaterial({ color: 0x000000 });
-            const line = new THREE.Line(geometry, material);
+            const points = graphic.points.map(p => new Vector3(p.x, p.y, 0));
+            const geometry = new BufferGeometry().setFromPoints(points);
+            const material = new LineBasicMaterial({ color: 0x000000 });
+            const line = new Line(geometry, material);
             group.add(line);
           }
           break;
@@ -578,11 +590,11 @@ export class SchematicEngine {
   private create2DWire(wire: SchematicWire): void {
     if (wire.points.length < 2) return;
 
-    const points = wire.points.map(p => new THREE.Vector3(p.x, p.y, 0.01)); // Slightly above sheet
-    const geometry = new THREE.BufferGeometry().setFromPoints(points);
-    const material = new THREE.LineBasicMaterial({ color: 0x0000ff, linewidth: 2 });
+    const points = wire.points.map(p => new Vector3(p.x, p.y, 0.01)); // Slightly above sheet
+    const geometry = new BufferGeometry().setFromPoints(points);
+    const material = new LineBasicMaterial({ color: 0x0000ff, linewidth: 2 });
 
-    const line = new THREE.Line(geometry, material);
+    const line = new Line(geometry, material);
     line.name = `wire_${wire.id}`;
     line.userData = { type: 'schematic_wire', wireId: wire.id };
 
@@ -590,10 +602,10 @@ export class SchematicEngine {
   }
 
   private create2DJunction(junction: SchematicJunction): void {
-    const geometry = new THREE.CircleGeometry(0.5, 16);
-    const material = new THREE.MeshBasicMaterial({ color: 0x000000 });
+    const geometry = new CircleGeometry(0.5, 16);
+    const material = new MeshBasicMaterial({ color: 0x000000 });
 
-    const junctionMesh = new THREE.Mesh(geometry, material);
+    const junctionMesh = new Mesh(geometry, material);
     junctionMesh.position.set(junction.position.x, junction.position.y, 0.02);
     junctionMesh.name = `junction_${junction.id}`;
     junctionMesh.userData = { type: 'schematic_junction', junctionId: junction.id };

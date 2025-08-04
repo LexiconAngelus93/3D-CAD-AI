@@ -1,4 +1,10 @@
-import * as THREE from 'three';
+import {
+   BufferGeometry,
+  Mesh,
+  MeshBasicMaterial,
+  Object3D,
+  Scene 
+} from 'three';
 
 export interface SimulationMesh {
   id: string;
@@ -64,7 +70,7 @@ export interface SimulationResult {
   nodeResults: Map<string, NodeResult>;
   elementResults: Map<string, ElementResult>;
   globalResults: GlobalResult;
-  visualization?: THREE.Object3D;
+  visualization?: Object3D;
 }
 
 export interface NodeResult {
@@ -118,11 +124,11 @@ export interface SimulationSettings {
 export class SimulationEngine {
   private meshes: Map<string, SimulationMesh> = new Map();
   private results: Map<string, SimulationResult> = new Map();
-  private scene: THREE.Scene;
+  private scene: Scene;
   private isInitialized: boolean = false;
   private workers: Worker[] = [];
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: Scene) {
     this.scene = scene;
   }
 
@@ -140,7 +146,7 @@ export class SimulationEngine {
   }
 
   // Mesh Generation
-  generateMesh(geometry: THREE.BufferGeometry, elementSize: number = 1.0): string {
+  generateMesh(geometry: BufferGeometry, elementSize: number = 1.0): string {
     const meshId = `mesh_${Date.now()}`;
     
     // Extract vertices and faces from geometry
@@ -1056,14 +1062,14 @@ export class SimulationEngine {
     // Create 3D visualization of results
     // This would create color-coded meshes showing stress, temperature, etc.
     
-    const geometry = new THREE.BufferGeometry();
-    const material = new THREE.MeshBasicMaterial({ 
+    const geometry = new BufferGeometry();
+    const material = new MeshBasicMaterial({ 
       color: 0xff0000,
       transparent: true,
       opacity: 0.7
     });
     
-    const mesh = new THREE.Mesh(geometry, material);
+    const mesh = new Mesh(geometry, material);
     mesh.name = `result_${result.id}`;
     mesh.userData = { type: 'simulation_result', resultId: result.id };
     
