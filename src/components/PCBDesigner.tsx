@@ -15,11 +15,11 @@ const PCBDesigner: React.FC = () => {
     }
   }, [appState.viewMode, pcbEngine, currentBoard]);
 
-  const handleAddComponent = (type: string, package: string) => {
+  const handleAddComponent = (type: string, packageType: string) => {
     if (!currentBoard) return;
 
     try {
-      const componentId = pcbEngine.addComponent(type, package, { x: 0, y: 0 });
+      const componentId = pcbEngine.addComponent(type, packageType, { x: 0, y: 0 });
       setSelectedComponent(componentId);
     } catch (error) {
       console.error('Failed to add component:', error);
