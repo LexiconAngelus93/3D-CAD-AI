@@ -7,59 +7,52 @@
 
 A revolutionary web-based 3D CAD platform that integrates artificial intelligence, parametric modeling, PCB design, schematic capture, and advanced simulation capabilities into a unified design environment.
 
-## 🚀 Features
+## 🚀 Live Demo
 
-### 🔧 3D CAD Modeling
-- **Parametric Modeling**: Full constraint-based parametric design with feature trees
-- **Sketch-Based Features**: 2D sketching with geometric and dimensional constraints
-- **Boolean Operations**: Union, intersection, and subtraction with robust geometry handling
-- **Assembly Modeling**: Complex assemblies with mate constraints and exploded views
-- **Surface Modeling**: NURBS surfaces for complex curved geometries
+**Working Application**: https://pgfeckhy.manus.space
+
+## ✨ Features
+
+### 🔧 3D CAD Engine
+- **Parametric Modeling**: Create and modify 3D objects with full parametric control
+- **Primitive Creation**: Box, Cylinder, Sphere primitives with customizable properties
+- **Object Management**: Hierarchical object tree with visibility controls
+- **Export Capabilities**: STL and OBJ file format support
+- **WebGL Fallback**: Graceful degradation when WebGL is not available
 
 ### 🤖 AI Integration
-- **Natural Language Generation**: Create 3D models from text descriptions
-- **Design Optimization**: AI-powered suggestions for weight, strength, and cost optimization
-- **Intelligent Assembly**: Automatic constraint suggestions and interference resolution
-- **Feature Recognition**: Automatic identification of geometric features in imported models
-- **Conversational Interface**: Chat-based interaction for design assistance
+- **Natural Language Processing**: Create 3D models using text commands
+- **Smart Object Generation**: AI-powered primitive creation
+- **Design Optimization**: AI-driven suggestions for improving designs
+- **Conversational Interface**: Interactive AI assistant for design tasks
 
-### ⚡ Electronic Design
-- **Schematic Capture**: Complete electronic circuit design with component libraries
-- **PCB Layout**: Multi-layer PCB design with auto-routing and design rule checking
-- **Component Libraries**: Extensive libraries of electronic components and footprints
-- **Design Rule Checking**: Automatic validation of electrical and manufacturing rules
-- **Gerber Export**: Industry-standard manufacturing file generation
+### ⚡ PCB Design Module
+- **Component Library**: Extensive library of electronic components
+- **Multi-Layer Support**: Professional PCB stackup management
+- **Auto-Routing**: Intelligent trace routing algorithms
+- **Design Rule Checking**: Comprehensive DRC validation
+- **Gerber Export**: Manufacturing-ready file generation
 
-### 📊 Simulation & Analysis
-- **Structural Analysis**: Finite element analysis for stress and deformation
-- **Thermal Analysis**: Heat transfer and thermal stress simulation
-- **Fluid Dynamics**: Computational fluid dynamics for flow analysis
-- **Modal Analysis**: Natural frequency and vibration mode analysis
-- **Multi-Physics**: Coupled analysis for complex engineering problems
-
-### 🎨 User Interface
-- **Modern Web UI**: Responsive design optimized for desktop and tablet
-- **Real-time Rendering**: Hardware-accelerated WebGL rendering
-- **Collaborative Tools**: Real-time collaboration with version control
-- **Customizable Workspace**: Adaptable interface for different workflows
-- **Cross-Platform**: Runs in any modern web browser
+### 📊 Simulation Engine
+- **Structural Analysis**: Finite Element Analysis (FEA) capabilities
+- **Thermal Analysis**: Heat transfer and temperature distribution
+- **Modal Analysis**: Natural frequency and vibration analysis
+- **Multi-Physics**: Coupled analysis capabilities
 
 ## 🛠️ Technology Stack
 
-- **Frontend**: React 18.2+, TypeScript 4.9+, Three.js
-- **3D Graphics**: WebGL 2.0, Hardware acceleration
-- **AI/ML**: TensorFlow.js, Custom neural networks
-- **Simulation**: WebAssembly-based finite element solver
-- **Build Tools**: Webpack 5, Babel, ESLint
-- **Testing**: Jest, React Testing Library
+- **Frontend**: React 19 + Vite
+- **3D Graphics**: Three.js with WebGL fallback
+- **UI Framework**: Tailwind CSS + shadcn/ui
+- **Package Manager**: pnpm
+- **Build System**: Vite (fast, modern bundling)
 
 ## 📋 Prerequisites
 
 - **Node.js**: Version 18.0 or higher
-- **npm**: Version 8.0 or higher
+- **pnpm**: Recommended package manager (or npm)
 - **Modern Browser**: Chrome 80+, Firefox 75+, Safari 14+, or Edge 80+
-- **WebGL 2.0**: Hardware acceleration enabled
-- **Memory**: Minimum 8GB RAM (16GB recommended for complex assemblies)
+- **WebGL Support**: For full 3D capabilities (fallback mode available)
 
 ## 🚀 Quick Start
 
@@ -73,20 +66,26 @@ A revolutionary web-based 3D CAD platform that integrates artificial intelligenc
 
 2. **Install dependencies**
    ```bash
+   pnpm install
+   # or
    npm install
    ```
 
 3. **Start development server**
    ```bash
-   npm start
+   pnpm run dev
+   # or
+   npm run dev
    ```
 
 4. **Open in browser**
-   Navigate to `http://localhost:3000`
+   Navigate to `http://localhost:5173`
 
 ### Production Build
 
 ```bash
+pnpm run build
+# or
 npm run build
 ```
 
