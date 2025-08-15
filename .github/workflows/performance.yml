@@ -7,7 +7,7 @@ on:
     branches: [ main ]
   schedule:
     # Run performance tests daily at 3 AM UTC
-    - cron: '0 3 * * *'
+    - cron: 
   workflow_dispatch:
     inputs:
       environment:
