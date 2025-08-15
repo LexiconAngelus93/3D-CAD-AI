@@ -35,6 +35,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(false)
   const [stats, setStats] = useState({})
   const [simulationResults, setSimulationResults] = useState(null)
+  const [webglStatus, setWebglStatus] = useState('Initializing...')
   
   const viewportRef = useRef(null)
   const cadEngineRef = useRef(null)
@@ -43,31 +44,54 @@ function App() {
   const simulationEngineRef = useRef(null)
 
   useEffect(() => {
-    if (viewportRef.current && !cadEngineRef.current) {
-      // Initialize engines
-      cadEngineRef.current = new CADEngine()
-      cadEngineRef.current.initialize(viewportRef.current)
-      
-      aiEngineRef.current = new AIEngine(cadEngineRef.current)
-      pcbEngineRef.current = new PCBEngine()
-      simulationEngineRef.current = new SimulationEngine()
+    const initializeEngines = async () => {
+      if (viewportRef.current && !cadEngineRef.current) {
+        try {
+          setWebglStatus('Initializing WebGL...')
+          
+          // Initialize CAD engine
+          cadEngineRef.current = new CADEngine()
+          await cadEngineRef.current.initialize(viewportRef.current)
+          
+          // Initialize other engines
+          aiEngineRef.current = new AIEngine(cadEngineRef.current)
+          pcbEngineRef.current = new PCBEngine()
+          simulationEngineRef.current = new SimulationEngine()
 
-      // Update stats
-      updateStats()
+          setWebglStatus('WebGL Ready')
+          updateStats()
 
-      // Handle window resize
-      const handleResize = () => {
-        if (cadEngineRef.current && viewportRef.current) {
-          cadEngineRef.current.resize(
-            viewportRef.current.clientWidth,
-            viewportRef.current.clientHeight
-          )
+          console.log('All engines initialized successfully')
+        } catch (error) {
+          console.error('Engine initialization failed:', error)
+          setWebglStatus('WebGL Failed')
         }
       }
-
-      window.addEventListener('resize', handleResize)
-      return () => window.removeEventListener('resize', handleResize)
     }
+
+    // Small delay to ensure DOM is ready
+    const timer = setTimeout(initializeEngines, 100)
+    
+    return () => {
+      clearTimeout(timer)
+      if (cadEngineRef.current) {
+        cadEngineRef.current.dispose()
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (cadEngineRef.current && viewportRef.current) {
+        cadEngineRef.current.resize(
+          viewportRef.current.clientWidth,
+          viewportRef.current.clientHeight
+        )
+      }
+    }
+
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
   }, [])
 
   const updateStats = () => {
@@ -83,26 +107,37 @@ function App() {
   }
 
   const createPrimitive = (type) => {
-    if (!cadEngineRef.current) return
-
-    let newObject
-    switch (type) {
-      case 'box':
-        newObject = cadEngineRef.current.createBox()
-        break
-      case 'cylinder':
-        newObject = cadEngineRef.current.createCylinder()
-        break
-      case 'sphere':
-        newObject = cadEngineRef.current.createSphere()
-        break
-      case 'torus':
-        newObject = cadEngineRef.current.createTorus()
-        break
+    if (!cadEngineRef.current) {
+      console.warn('CAD Engine not initialized')
+      return
     }
 
-    if (newObject) {
-      updateStats()
+    let newObject
+    try {
+      switch (type) {
+        case 'box':
+          newObject = cadEngineRef.current.createBox()
+          break
+        case 'cylinder':
+          newObject = cadEngineRef.current.createCylinder()
+          break
+        case 'sphere':
+          newObject = cadEngineRef.current.createSphere()
+          break
+        case 'torus':
+          newObject = cadEngineRef.current.createTorus()
+          break
+        default:
+          console.warn('Unknown primitive type:', type)
+          return
+      }
+
+      if (newObject) {
+        updateStats()
+        console.log(`Created ${type}:`, newObject.name)
+      }
+    } catch (error) {
+      console.error(`Failed to create ${type}:`, error)
     }
   }
 
@@ -201,6 +236,50 @@ function App() {
     }
   }
 
+  const exportSTL = () => {
+    if (cadEngineRef.current && objects.length > 0) {
+      // Simple STL export simulation
+      const stlData = `solid CADModel
+${objects.map(obj => `  facet normal 0 0 1
+    outer loop
+      vertex 0 0 0
+      vertex 1 0 0
+      vertex 0 1 0
+    endloop
+  endfacet`).join('\n')}
+endsolid CADModel`
+      
+      const blob = new Blob([stlData], { type: 'text/plain' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'cad-model.stl'
+      a.click()
+      URL.revokeObjectURL(url)
+    }
+  }
+
+  const exportOBJ = () => {
+    if (cadEngineRef.current && objects.length > 0) {
+      // Simple OBJ export simulation
+      const objData = `# CAD Model Export
+${objects.map((obj, i) => `
+o ${obj.name}
+v 0 0 0
+v 1 0 0
+v 0 1 0
+f 1 2 3`).join('\n')}`
+      
+      const blob = new Blob([objData], { type: 'text/plain' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'cad-model.obj'
+      a.click()
+      URL.revokeObjectURL(url)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-900 text-white">
       {/* Header */}
@@ -209,9 +288,16 @@ function App() {
           <h1 className="text-2xl font-bold">3D CAD AI - Advanced Computer-Aided Design</h1>
           <div className="flex items-center space-x-4">
             <Badge variant="secondary">Objects: {stats.objects || 0}</Badge>
-            <Button variant="outline" size="sm" onClick={exportScene}>
+            <Badge variant={webglStatus === 'WebGL Ready' ? 'default' : 'destructive'}>
+              {webglStatus}
+            </Badge>
+            <Button variant="outline" size="sm" onClick={exportSTL}>
               <Download className="w-4 h-4 mr-2" />
-              Export
+              Export STL
+            </Button>
+            <Button variant="outline" size="sm" onClick={exportOBJ}>
+              <Download className="w-4 h-4 mr-2" />
+              Export OBJ
             </Button>
             <Button variant="outline" size="sm">
               <Upload className="w-4 h-4 mr-2" />
@@ -244,6 +330,7 @@ function App() {
                   <Button 
                     onClick={() => createPrimitive('box')} 
                     className="w-full justify-start"
+                    disabled={webglStatus !== 'WebGL Ready'}
                   >
                     <Box className="w-4 h-4 mr-2" />
                     Box
@@ -251,6 +338,7 @@ function App() {
                   <Button 
                     onClick={() => createPrimitive('cylinder')} 
                     className="w-full justify-start"
+                    disabled={webglStatus !== 'WebGL Ready'}
                   >
                     <Cylinder className="w-4 h-4 mr-2" />
                     Cylinder
@@ -258,6 +346,7 @@ function App() {
                   <Button 
                     onClick={() => createPrimitive('sphere')} 
                     className="w-full justify-start"
+                    disabled={webglStatus !== 'WebGL Ready'}
                   >
                     <Circle className="w-4 h-4 mr-2" />
                     Sphere
@@ -265,6 +354,7 @@ function App() {
                   <Button 
                     onClick={() => createPrimitive('torus')} 
                     className="w-full justify-start"
+                    disabled={webglStatus !== 'WebGL Ready'}
                   >
                     <Torus className="w-4 h-4 mr-2" />
                     Torus
@@ -274,31 +364,35 @@ function App() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg">Object Tree</CardTitle>
+                  <CardTitle className="text-lg">Objects ({objects.length})</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2">
-                    {objects.map((obj) => (
-                      <div key={obj.id} className="flex items-center justify-between p-2 bg-gray-700 rounded">
-                        <span className="text-sm">{obj.name}</span>
-                        <div className="flex space-x-1">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => toggleObjectVisibility(obj.id)}
-                          >
-                            {obj.visible ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => deleteObject(obj.id)}
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
+                    {objects.length === 0 ? (
+                      <p className="text-gray-400 text-sm">No objects created yet</p>
+                    ) : (
+                      objects.map((obj) => (
+                        <div key={obj.id} className="flex items-center justify-between p-2 bg-gray-700 rounded">
+                          <span className="text-sm">{obj.name}</span>
+                          <div className="flex space-x-1">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => toggleObjectVisibility(obj.id)}
+                            >
+                              {obj.visible ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => deleteObject(obj.id)}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -312,14 +406,15 @@ function App() {
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
                     <Input
-                      placeholder="Describe what you want to create..."
+                      placeholder="Describe what to create..."
                       value={aiCommand}
                       onChange={(e) => setAiCommand(e.target.value)}
                       onKeyPress={(e) => e.key === 'Enter' && handleAICommand()}
+                      disabled={webglStatus !== 'WebGL Ready'}
                     />
                     <Button 
                       onClick={handleAICommand} 
-                      disabled={isLoading || !aiCommand.trim()}
+                      disabled={isLoading || !aiCommand.trim() || webglStatus !== 'WebGL Ready'}
                       className="w-full"
                     >
                       <Brain className="w-4 h-4 mr-2" />
@@ -468,23 +563,47 @@ function App() {
           <div 
             ref={viewportRef} 
             className="w-full h-full bg-gray-900"
-            style={{ minHeight: '600px' }}
-          />
+            style={{ minHeight: '400px' }}
+          >
+            {webglStatus !== 'WebGL Ready' && (
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
+                <div className="text-center">
+                  <div className="text-6xl mb-4">🖥️</div>
+                  <div className="text-xl font-semibold mb-2">{webglStatus}</div>
+                  <div className="text-gray-400">
+                    {webglStatus === 'Initializing...' && 'Setting up 3D viewport...'}
+                    {webglStatus === 'WebGL Ready' && '3D viewport ready for CAD operations'}
+                    {webglStatus === 'WebGL Failed' && 'Failed to initialize WebGL. Please check browser support.'}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
           
-          {/* Status Bar */}
-          <div className="absolute bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 p-2">
-            <div className="flex items-center justify-between text-sm">
-              <div className="flex space-x-4">
-                <span>Mode: {activeTab.toUpperCase()}</span>
-                <span>Objects: {stats.objects || 0}</span>
-                {stats.simulation?.totalNodes > 0 && (
-                  <span>Nodes: {stats.simulation.totalNodes}</span>
-                )}
-              </div>
-              <div className="flex space-x-4">
-                <span>Ready</span>
-              </div>
-            </div>
+          {/* Viewport Controls */}
+          <div className="absolute bottom-4 right-4 flex space-x-2">
+            <Button 
+              size="sm" 
+              variant="outline"
+              onClick={() => {
+                if (cadEngineRef.current) {
+                  cadEngineRef.current.camera.position.set(10, 10, 10)
+                  cadEngineRef.current.camera.lookAt(0, 0, 0)
+                }
+              }}
+            >
+              Reset View
+            </Button>
+            <Button 
+              size="sm" 
+              variant="outline"
+              onClick={() => {
+                // Fit all objects in view
+                console.log('Fit to view')
+              }}
+            >
+              Fit All
+            </Button>
           </div>
         </div>
       </div>
